@@ -2,20 +2,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
 
-    // ⚠️ Replace YOUR_ADMIN_UID with your Firebase Auth user UID
-    // (Authentication -> Users -> User UID)
-    function owner() { return request.auth != null && request.auth.uid == 'YOUR_ADMIN_UID'; }
-
     function st() { return get(/databases/$(db)/documents/auth/state).data; }
     function locked() {
       return st().count >= 5 && st().lockedAt + duration.value(24, 'd') > request.time;
     }
 
-    // Admin = ONLY the owner, and only while not locked
-    function admin() { return owner() && !locked(); }
-
-    // Same account can unlock the dashboard
-    function unlocker() { return owner(); }
+    function admin() { return request.auth != null && !locked(); }
+    // ⚠️ Replace YOUR_ADMIN_UID with your Firebase Auth user UID
+    // (Authentication -> Users -> User UID)
+    function unlocker() { return request.auth != null && request.auth.uid == 'YOUR_ADMIN_UID'; }
 
     match /auth/state {
       allow get: if true;
@@ -36,7 +31,7 @@ service cloud.firestore {
                             ? request.resource.data.lockedAt == request.time
                             : request.resource.data.lockedAt == resource.data.lockedAt))
 
-                      || (owner() && !locked() && request.resource.data.last == 'ok'
+                      || (request.auth != null && !locked() && request.resource.data.last == 'ok'
                         && request.resource.data.count == 0
                         && request.resource.data.okAt == request.time
                         && request.resource.data.lockedAt == resource.data.lockedAt)
