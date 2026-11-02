@@ -14,17 +14,21 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 
 ## 📸 Screenshots
 
-| Login | Websites | Devices |
-|:---:|:---:|:---:|
-| <img src="screenshots/login.png" width="100%" alt="Login"> | <img src="screenshots/sites.png" width="100%" alt="Websites"> | <img src="screenshots/devices.png" width="100%" alt="Devices"> |
+| Login | Websites |
+|:---:|:---:|
+| <img src="screenshots/login.png" width="100%" alt="Login"> | <img src="screenshots/sites.png" width="100%" alt="Websites"> |
 
-| Device details | Attempts | Ban dialog |
-|:---:|:---:|:---:|
-| <img src="screenshots/detail.png" width="100%" alt="Device details"> | <img src="screenshots/attempts.png" width="100%" alt="Login attempts"> | <img src="screenshots/blocked.png" width="100%" alt="Ban dialog"> |
+| Devices | Device details |
+|:---:|:---:|
+| <img src="screenshots/devices.png" width="100%" alt="Devices"> | <img src="screenshots/detail.png" width="100%" alt="Device details"> |
+
+| Attempts | Ban dialog |
+|:---:|:---:|
+| <img src="screenshots/attempts.png" width="100%" alt="Login attempts"> | <img src="screenshots/blocked.png" width="100%" alt="Ban dialog"> |
 
 <p align="center">
   <b>What a banned visitor sees</b><br><br>
-  <img src="screenshots/blocked2.png" width="30%" alt="Access blocked page">
+  <img src="screenshots/blocked2.png" width="50%" alt="Access blocked page">
 </p>
 
 ---
