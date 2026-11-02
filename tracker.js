@@ -1,7 +1,7 @@
 /*
  * tracker.js
  * Usage (put at the end of each page, before </body>):
- *   <script src="tracker.js" data-site="" defer></script>
+ *   <script src="tracker.js" data-site="#" defer></script>
  * data-site = the name that appears as a tab in your dashboard.
  */
 (function () {
@@ -11,17 +11,41 @@
   var SITE = (S && S.getAttribute("data-site")) || location.hostname;
 
   var CFG = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDASut3M99bMgmQK_V4Xk12zyMGMPMArcM",
+    authDomain: "logweb-27703.firebaseapp.com",
+    projectId: "logweb-27703",
+    storageBucket: "logweb-27703.firebasestorage.app",
+    messagingSenderId: "430930872770",
+    appId: "1:430930872770:web:3a709d412daab76a79ae5b"
   };
   var FB = "https://www.gstatic.com/firebasejs/10.14.1/";
   var DEFAULT_MSG = "You have been blocked from viewing this website.";
 
   var blocked = false;
+
+  /* ---------- media tracking ----------
+     Catches <audio>/<video> in the page AND elements created with new Audio()
+     (those are never in the DOM, so querySelectorAll can't see them). */
+  var MEDIA = [];
+  function trackMedia(m) { if (MEDIA.indexOf(m) < 0) MEDIA.push(m); }
+  try {
+    var origPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      trackMedia(this);
+      return origPlay.apply(this, arguments);
+    };
+  } catch (e) {}
+  function mediaPlaying() {
+    try {
+      var els = document.querySelectorAll("audio,video");
+      for (var i = 0; i < els.length; i++) trackMedia(els[i]);
+    } catch (e) {}
+    for (var j = 0; j < MEDIA.length; j++) {
+      var m = MEDIA[j];
+      if (!m.paused && !m.ended) return true;
+    }
+    return false;
+  }
 
   function LS(k, v) {
     try {
@@ -42,10 +66,10 @@
     else if (/Linux/.test(u)) os = "Linux";
     var br = /Edg\//.test(u) ? "Edge"
       : /OPR\/|Opera/.test(u) ? "Opera"
-        : /Firefox|FxiOS/.test(u) ? "Firefox"
-          : /SamsungBrowser/.test(u) ? "Samsung Internet"
-            : /Chrome|CriOS/.test(u) ? "Chrome"
-              : /Safari/.test(u) ? "Safari" : "Browser";
+      : /Firefox|FxiOS/.test(u) ? "Firefox"
+      : /SamsungBrowser/.test(u) ? "Samsung Internet"
+      : /Chrome|CriOS/.test(u) ? "Chrome"
+      : /Safari/.test(u) ? "Safari" : "Browser";
     return br + " on " + os;
   }
 
@@ -54,7 +78,7 @@
     try {
       var c = sessionStorage.getItem("_lg_ip");
       if (c) return JSON.parse(c);
-    } catch (e) { }
+    } catch (e) {}
     var out = {};
     async function get(url) {
       var ac = new AbortController();
@@ -67,14 +91,14 @@
     try {
       var j = await get("https://ipwho.is/");
       if (j && j.ip) out = { ip: j.ip, city: j.city || "", country: j.country || "" };
-    } catch (e) { }
+    } catch (e) {}
     if (!out.ip) {
       try {
         var k = await get("https://api.ipify.org?format=json");
         if (k && k.ip) out = { ip: k.ip };
-      } catch (e) { }
+      } catch (e) {}
     }
-    try { sessionStorage.setItem("_lg_ip", JSON.stringify(out)); } catch (e) { }
+    try { sessionStorage.setItem("_lg_ip", JSON.stringify(out)); } catch (e) {}
     return out;
   }
 
@@ -140,12 +164,11 @@
         try {
           var s = await f.getDoc(f.doc(db, "bans", key));
           if (s.exists()) return { msg: s.data().msg || "" };
-        } catch (e) { }
+        } catch (e) {}
         return null;
       }
       var ipKey = function (ip) { return "ip_" + String(ip).replace(/[.:]/g, "_"); };
 
-      /* 1) ban check (device first, then IP) */
       /* 1) ban check + live ban listeners */
       var ipP = getIP();
       var bansNow = {}, got = {}, need = 0, registered = false, kIp = null;
@@ -165,7 +188,7 @@
           if (s.exists()) bansNow[key] = s.data().msg || "";
           else delete bansNow[key];
           if (Object.keys(got).length >= need) applyBan();
-        }, function () { });
+        }, function () {});
       }
       function startBlocked(msg) {
         block(msg);
@@ -199,7 +222,7 @@
         try {
           await f.updateDoc(dref, Object.assign({ lastSeen: f.serverTimestamp(), visits: f.increment(1) }, info));
           done = true;
-        } catch (e) { }
+        } catch (e) {}
       }
       if (!done) {
         await f.setDoc(dref, Object.assign({
@@ -224,14 +247,36 @@
         trashed: false
       });
 
-      /* 4) time on page (counts only while the tab is visible) */
-      var active = 0, sent = 0;
+      /* 4) time on page
+         counts while the tab is visible, OR while audio/video is playing
+         (so minimizing / switching apps during playback still counts) */
+      var active = 0, sent = 0, lastTick = Date.now();
+
+      function isActive() {
+        return document.visibilityState === "visible" || mediaPlaying();
+      }
+      var wasActive = isActive();
+      /* instant online/offline signal for the dashboard */
+      function setOnline(v) {
+        var p = { online: v };
+        if (v) p.lastSeen = f.serverTimestamp();
+        try { f.updateDoc(dref, p).catch(function () {}); } catch (e) {}
+      }
+
       setInterval(function () {
-        if (document.visibilityState === "visible" && !blocked) active++;
+        var now = Date.now();
+        /* real elapsed seconds (browsers slow timers in background tabs);
+           capped so a sleeping device doesn't add huge jumps */
+        var gap = Math.min((now - lastTick) / 1000, 65);
+        lastTick = now;
+        if (blocked) return;
+        var act = isActive();
+        if (act) active += gap;
+        if (act !== wasActive) { wasActive = act; setOnline(act); }
       }, 1000);
 
       async function flush() {
-        var cur = active, delta = cur - sent;
+        var cur = Math.round(active), delta = cur - sent;
         if (delta <= 0 || blocked) return;
         sent = cur;
         try {
@@ -241,14 +286,17 @@
           ]);
         } catch (e) { sent -= delta; }
       }
-      setInterval(flush, 30000);
+      setInterval(flush, 20000);
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState === "hidden") flush();
+        var act = isActive();
+        if (act !== wasActive) { wasActive = act; setOnline(act); }
       });
-      addEventListener("pagehide", flush);
+      addEventListener("pagehide", function () { flush(); setOnline(false); });
 
       /* 5) registered: start live ban listeners */
       registered = true;
+      setOnline(true);
       watch(id);
       if (kIp) watch(kIp);
     } catch (e) {
