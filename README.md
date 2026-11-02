@@ -66,7 +66,7 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 │   ├── detail.png
 │   ├── attempts.png
 │   ├── blocked.png
-│   └── dark.png
+│   └── blocked2.png
 ├── LICENSE
 ├── SECURITY.md
 └── README.md
