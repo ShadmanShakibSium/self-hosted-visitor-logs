@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    // ⚠️ Replace YOUR_ADMIN_UID with your Firebase Auth user UID
+    // (Authentication -> Users -> User UID)
+    function owner() { return request.auth != null && request.auth.uid == 'YOUR_ADMIN_UID'; }
+
+    function st() { return get(/databases/$(db)/documents/auth/state).data; }
+    function locked() {
+      return st().count >= 5 && st().lockedAt + duration.value(24, 'd') > request.time;
+    }
+
+    // Admin = ONLY the owner, and only while not locked
+    function admin() { return owner() && !locked(); }
+
+    // Same account can unlock the dashboard
+    function unlocker() { return owner(); }
+
+    match /auth/state {
+      allow get: if true;
+      allow create: if request.resource.data.keys().hasOnly(['count','last','at','okAt','lockedAt'])
+                    && request.resource.data.count == 0
+                    && request.resource.data.last == 'fail'
+                    && request.resource.data.at == timestamp.date(2000, 1, 1)
+                    && request.resource.data.okAt == timestamp.date(2000, 1, 1)
+                    && request.resource.data.lockedAt == timestamp.date(2000, 1, 1);
+      allow update: if request.resource.data.keys().hasOnly(['count','last','at','okAt','lockedAt'])
+                    && request.resource.data.at == request.time
+                    && (
+
+                      (!locked() && request.resource.data.last == 'fail'
+                        && request.resource.data.okAt == resource.data.okAt
+                        && request.resource.data.count == (resource.data.count >= 5 ? 1 : resource.data.count + 1)
+                        && (request.resource.data.count >= 5
+                            ? request.resource.data.lockedAt == request.time
+                            : request.resource.data.lockedAt == resource.data.lockedAt))
+
+                      || (owner() && !locked() && request.resource.data.last == 'ok'
+                        && request.resource.data.count == 0
+                        && request.resource.data.okAt == request.time
+                        && request.resource.data.lockedAt == resource.data.lockedAt)
+
+                      || (unlocker() && request.resource.data.count == 0
+                        && request.resource.data.okAt == resource.data.okAt
+                        && request.resource.data.lockedAt == resource.data.lockedAt)
+                    );
+    }
+
+    match /attempts/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['ts','result','ua','device','lang','screen','ip','city','country'])
+                    && request.resource.data.ts == request.time
+                    && request.resource.data.result in ['success','wrong','locked','unlocked']
+                    && request.resource.data.ua.size() <= 300
+                    && request.resource.data.device.size() <= 100
+                    && request.resource.data.get('lang', '').size() <= 20
+                    && request.resource.data.get('screen', '').size() <= 20
+                    && request.resource.data.get('ip', '').size() <= 64
+                    && request.resource.data.get('city', '').size() <= 60
+                    && request.resource.data.get('country', '').size() <= 60;
+      allow list, delete: if admin();
+      allow update: if false;
+    }
+
+    match /bans/{id} {
+      allow get: if true;
+      allow list, create, update, delete: if admin();
+    }
+
+    match /devices/{id} {
+      allow list: if admin();
+      allow create: if request.resource.data.trashed == false;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'visits', 'totalTime', 'ip', 'city', 'country'])
+                    || admin();
+      allow delete: if admin();
+
+      match /logs/{logId} {
+        allow list: if admin();
+        allow create: if request.resource.data.trashed == false;
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['duration'])
+                      || admin();
+        allow delete: if admin();
+      }
+    }
+  }
+}
