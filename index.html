@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#5b5bf0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Logs">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" href="icons/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <title>Log Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --bg: #f4f5fb;
+      --card: #fff;
+      --tx: #161a2b;
+      --mu: #6b7285;
+      --bd: #e7e9f2;
+      --ac: #5b5bf0;
+      --acs: #eceefe;
+      --rd: #e5484d;
+      --rds: #fdecec;
+      --gn: #18a058;
+      --gns: #e6f6ee;
+      --sh: 0 1px 2px rgba(20, 24, 50, .05), 0 6px 20px rgba(20, 24, 50, .05)
+    }
+
+    @media(prefers-color-scheme:dark) {
+      :root {
+        --bg: #0d0f17;
+        --card: #161924;
+        --tx: #eceef6;
+        --mu: #9097ad;
+        --bd: #252a3a;
+        --ac: #8b8bff;
+        --acs: #23264a;
+        --rd: #ff6b70;
+        --rds: #3a1d21;
+        --gn: #4cd18a;
+        --gns: #16301f;
+        --sh: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25)
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--tx);
+      font: 15px/1.55 "Inter", system-ui, sans-serif
+    }
+
+    i {
+      flex-shrink: 0
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: color-mix(in srgb, var(--card) 88%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--bd)
+    }
+
+    .hin {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 17px
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--ac);
+      color: #fff;
+      display: grid;
+      place-items: center
+    }
+
+    .live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--gn);
+      font-weight: 500
+    }
+
+    .live::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--gn);
+      box-shadow: 0 0 0 3px var(--gns)
+    }
+
+    .tabs {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      gap: 8px;
+      padding: 14px 16px 6px;
+      overflow-x: auto;
+      scrollbar-width: none
+    }
+
+    .tabs::-webkit-scrollbar {
+      display: none
+    }
+
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      border: 1px solid var(--bd);
+      background: var(--card);
+      color: var(--tx);
+      padding: 8px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 500;
+      box-shadow: var(--sh)
+    }
+
+    .tab .n {
+      background: var(--bg);
+      color: var(--mu);
+      font-size: 12px;
+      padding: 0 8px;
+      border-radius: 99px
+    }
+
+    .tab.on {
+      background: var(--ac);
+      border-color: var(--ac);
+      color: #fff
+    }
+
+    .tab.on .n {
+      background: rgba(255, 255, 255, .22);
+      color: #fff
+    }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 10px 16px 48px
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 14px
+    }
+
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--sh);
+      display: flex;
+      align-items: center;
+      gap: 12px
+    }
+
+    .stat .si {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--acs);
+      color: var(--ac);
+      display: grid;
+      place-items: center
+    }
+
+    .stat b {
+      display: block;
+      font-size: 19px;
+      line-height: 1.2
+    }
+
+    .mu {
+      color: var(--mu);
+      font-size: 13px
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 10px;
+      box-shadow: var(--sh)
+    }
+
+    .dev {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      cursor: pointer;
+      transition: transform .12s, border-color .12s
+    }
+
+    .dev:hover {
+      transform: translateY(-1px);
+      border-color: var(--ac)
+    }
+
+    .av {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--acs);
+      color: var(--ac);
+      display: grid;
+      place-items: center;
+      font-size: 20px
+    }
+
+    .av.bad {
+      background: var(--rds);
+      color: var(--rd)
+    }
+
+    .info {
+      flex: 1;
+      min-width: 0
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+
+    .top b {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 14px;
+      color: var(--mu);
+      font-size: 13px
+    }
+
+    .meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .meta i {
+      width: 14px;
+      text-align: center;
+      font-size: 12px
+    }
+
+    .chips {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--acs);
+      color: var(--ac);
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 12.5px;
+      font-weight: 500
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--rds);
+      color: var(--rd);
+      padding: 1px 9px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 600
+    }
+
+    .badge.ok {
+      background: var(--gns);
+      color: var(--gn)
+    }
+
+    .badge.nw {
+      background: var(--acs);
+      color: var(--ac)
+    }
+
+    .chev {
+      color: var(--mu);
+      font-size: 13px
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--bd);
+      background: var(--card);
+      color: var(--tx);
+      padding: 8px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500
+    }
+
+    .btn:hover {
+      border-color: var(--ac)
+    }
+
+    .btn.pri {
+      background: var(--ac);
+      border-color: var(--ac);
+      color: #fff
+    }
+
+    .btn.red {
+      color: var(--rd);
+      background: var(--rds);
+      border-color: transparent
+    }
+
+    .btn.grn {
+      color: var(--gn);
+      background: var(--gns);
+      border-color: transparent
+    }
+
+    .btn.sm {
+      padding: 5px 10px;
+      font-size: 13px
+    }
+
+    .acts {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px
+    }
+
+    .back {
+      margin-bottom: 12px
+    }
+
+    .prof {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start
+    }
+
+    .prof .av {
+      width: 56px;
+      height: 56px;
+      font-size: 24px
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 14px
+    }
+
+    .grid div {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 10px 12px
+    }
+
+    .grid .mu {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px
+    }
+
+    .grid b {
+      font-size: 14px;
+      font-weight: 600;
+      word-break: break-word
+    }
+
+    .sec {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 20px 2px 10px;
+      font-size: 16px
+    }
+
+    .tl {
+      position: relative;
+      padding-left: 22px
+    }
+
+    .tl::before {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: var(--bd)
+    }
+
+    .log {
+      position: relative
+    }
+
+    .log::before {
+      content: "";
+      position: absolute;
+      left: -21px;
+      top: 20px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ac);
+      box-shadow: 0 0 0 4px var(--acs)
+    }
+
+    .log .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .log .pg {
+      word-break: break-all;
+      margin-top: 2px
+    }
+
+    .trashed {
+      opacity: .6
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--mu);
+      padding: 48px 16px
+    }
+
+    .empty i {
+      font-size: 36px;
+      margin-bottom: 12px;
+      opacity: .5;
+      display: block
+    }
+
+    .login {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 16px
+    }
+
+    .lcard {
+      width: 100%;
+      max-width: 360px;
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 22px;
+      padding: 28px 24px;
+      box-shadow: var(--sh);
+      text-align: center
+    }
+
+    .lic {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      background: var(--acs);
+      color: var(--ac);
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      margin: 0 auto 14px
+    }
+
+    .lcard h2 {
+      margin: 0 0 2px
+    }
+
+    .field {
+      position: relative;
+      margin: 18px 0 6px
+    }
+
+    .field i {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--mu)
+    }
+
+    .field input {
+      width: 100%;
+      padding: 12px 14px 12px 40px;
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      background: var(--bg);
+      color: var(--tx);
+      font: inherit;
+      outline: none
+    }
+
+    .field input:focus {
+      border-color: var(--ac);
+      box-shadow: 0 0 0 3px var(--acs)
+    }
+
+    .err {
+      color: var(--rd);
+      font-size: 13px;
+      min-height: 22px;
+      margin-bottom: 6px
+    }
+
+    .lcard .btn {
+      width: 100%;
+      padding: 12px
+    }
+
+    @media(max-width:520px) {
+      .stats {
+        grid-template-columns: 1fr
+      }
+
+      .stat {
+        padding: 10px 14px
+      }
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(10, 12, 24, .55);
+      backdrop-filter: blur(3px);
+      display: grid;
+      place-items: center;
+      padding: 16px
+    }
+
+    .mbox {
+      width: 100%;
+      max-width: 380px;
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: var(--sh)
+    }
+
+    .mbox h3 {
+      margin: 0;
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--gn);
+      display: inline-block;
+      animation: pl 1.4s infinite
+    }
+
+    @keyframes pl {
+      50% {
+        opacity: .3
+      }
+    }
+
+    @media(max-width:520px) {
+      .tabs {
+        padding: 14px 10px 6px;
+        gap: 6px
+      }
+
+      .tab {
+        flex: 1;
+        justify-content: center;
+        padding: 8px 6px;
+        gap: 5px;
+        font-size: 13px
+      }
+
+      .tab i {
+        display: none
+      }
+
+      .tab .n {
+        padding: 0 6px
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getFirestore, collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, addDoc, getDocs, updateDoc, limit, writeBatch, deleteField, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+    const app = initializeApp({
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    });
+    let PASS = 0, PW = "", MODE = "", bsub = "device", tSite = "";
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const $ = document.getElementById("app");
+    let devices = [], bans = {}, attempts = [], tab = "", curSite = "", open = null, logs = [], unsubs = [], unLogs = null;
+
+    const SESSION_MIN = 2, SK = "_lg_dash", LOCK_DAYS = 24;
+    let expAt = 0, lastTouch = 0, busy = false;
+    function numOf(str) {
+      let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (let i = 0, c; i < str.length; i++) { c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677) }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return (4294967296 * (2097151 & h2) + (h1 >>> 0)) % 9000 + 1000
+    }
+    const saveSess = () => { expAt = Date.now() + SESSION_MIN * 60000; try { localStorage.setItem(SK, JSON.stringify({ m: MODE, exp: expAt })) } catch (e) { } };
+    const clearSess = () => { try { localStorage.removeItem(SK) } catch (e) { } };
+    const loadSess = () => { try { const x = JSON.parse(localStorage.getItem(SK) || "null"); return x && x.exp > Date.now() ? x : null } catch (e) { return null } };
+    const touch = () => { if (!MODE) return; const n = Date.now(); if (n - lastTouch > 5000) { lastTouch = n; saveSess() } };
+    ["click", "keydown", "touchstart", "scroll", "mousemove"].forEach(ev => addEventListener(ev, touch, { passive: true }));
+    setInterval(() => { if (MODE && Date.now() > expAt) lockOut("Session expired. Please sign in again.") }, 10000);
+    const nm = d => d.alias || d.device || d.ua || "Unknown device";
+    const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    function askName(cur) {
+      return new Promise(res => {
+        const m = document.createElement("div"); m.className = "modal";
+        m.innerHTML = `<div class="mbox"><h3><i class="fa-solid fa-pen"></i> Rename device</h3>
+  <div class="field" style="margin:14px 0 8px"><i class="fa-solid fa-tag"></i><input id="rn" maxlength="40" placeholder="e.g. My iPhone" value="${esc(cur)}"></div>
+  <div class="mu" style="margin-bottom:14px">Leave empty to go back to the original name.</div>
+  <div class="acts" style="justify-content:flex-end;margin:0"><button class="btn" id="rc">Cancel</button><button class="btn pri" id="rs">Save</button></div></div>`;
+        document.body.appendChild(m);
+        const i = m.querySelector("#rn"); i.focus(); i.select();
+        const end = v => { m.remove(); res(v) };
+        m.querySelector("#rs").onclick = () => end(i.value);
+        m.querySelector("#rc").onclick = () => end(null);
+        m.onclick = e => { if (e.target === m) end(null) };
+        i.onkeydown = e => { if (e.key === "Enter") end(i.value); if (e.key === "Escape") end(null) };
+      })
+    }
+
+    function askBan(title) {
+      return new Promise(res => {
+        const m = document.createElement("div"); m.className = "modal";
+        m.innerHTML = `<div class="mbox"><h3><i class="fa-solid fa-ban"></i> ${esc(title)}</h3>
+  <textarea id="bm" maxlength="200" placeholder="Message to show (optional)" style="width:100%;height:90px;margin:14px 0 8px;padding:12px;border:1px solid var(--bd);border-radius:12px;background:var(--bg);color:var(--tx);font:inherit;resize:none;outline:none"></textarea>
+  <div class="mu" style="margin-bottom:14px">Leave empty to show the default message.</div>
+  <div class="acts" style="justify-content:flex-end;margin:0"><button class="btn" id="bc">Cancel</button><button class="btn red" id="bs">Ban</button></div></div>`;
+        document.body.appendChild(m);
+        const t = m.querySelector("#bm"); t.focus();
+        const end = v => { m.remove(); res(v) };
+        m.querySelector("#bs").onclick = () => end(t.value);
+        m.querySelector("#bc").onclick = () => end(null);
+        m.onclick = e => { if (e.target === m) end(null) };
+        t.onkeydown = e => { if (e.key === "Escape") end(null) };
+      })
+    }
+
+    const T = t => t?.toDate ? t.toDate() : (t ? new Date(t) : null);
+    const fd = t => { const d = T(t); return d ? d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—" };
+    const dur = s => { s = Math.round(s || 0); if (s < 60) return s + " sec"; const m = Math.floor(s / 60); return m < 60 ? m + "m " + (s % 60) + "s" : Math.floor(m / 60) + "h " + (m % 60) + "m" };
+    const ipKey = ip => "ip_" + String(ip).replace(/[.:]/g, "_");
+    const isBanned = d => !!(bans[d.id] || (d.ip && bans[ipKey(d.ip)]));
+    const ic = n => `<i class="fa-solid fa-${n}"></i>`;
+    const dIcon = d => { const u = ((d.device || "") + " " + (d.ua || "")).toLowerCase(); return /ipad|tablet/.test(u) ? "tablet-screen-button" : /mobile|android|iphone/.test(u) ? "mobile-screen" : "desktop" };
+    const loc = d => [d.city, d.country].filter(Boolean).join(", ") || "—";
+    const ONLINE_MS = 70000;
+    const isOn = d => { const t = T(d.lastSeen); return !!t && Date.now() - t.getTime() < ONLINE_MS };
+    const ago = t => {
+      const d = T(t); if (!d) return "—"; const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+      if (s < 60) return s + " sec ago"; const m = Math.floor(s / 60); if (m < 60) return m + " min ago";
+      const h = Math.floor(m / 60); if (h < 24) return h + "h " + (m % 60) + "m ago"; const dd = Math.floor(h / 24); return dd + " day" + (dd > 1 ? "s" : "") + " ago"
+    };
+    const stat = d => isOn(d) ? `<span class="badge ok"><span class="pulse"></span>Online now</span>` : `<span class="mu" style="font-size:12px">Last online ${ago(d.lastSeen)}</span>`;
+    const isNew = d => { const t = T(d.firstSeen); return !d.seen && !d.trashed && !!t && Date.now() - t.getTime() < 7 * 864e5 };
+    async function markSeen(id) {
+      const d = devices.find(x => x.id === id); if (!d || d.seen) return;
+      const b = writeBatch(db); b.update(doc(db, "devices", id), { seen: true });
+      try { await b.commit() } catch (e) { console.error(e) }
+    }
+
+    /* ---------- install app ---------- */
+    let dip = null;
+    const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    addEventListener("beforeinstallprompt", e => { e.preventDefault(); dip = e });
+    addEventListener("appinstalled", () => { dip = null; if (MODE) render() });
+    function installHelp() {
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const m = document.createElement("div"); m.className = "modal";
+      m.innerHTML = `<div class="mbox"><h3>${ic("download")} Install app</h3>
+  <div class="mu" style="margin:14px 0 8px">${ios ? "Tap the Share button in Safari, then choose <b>Add to Home Screen</b>." : "Open the browser menu (&#8942;) and choose <b>Install app</b> or <b>Add to Home screen</b>."}</div>
+  <div class="mu" style="margin-bottom:14px">Open the site directly in Chrome or Safari, not inside another app.</div>
+  <div id="chk" class="mu" style="margin-bottom:14px;line-height:1.9">Checking...</div>
+  <div class="acts" style="justify-content:flex-end;margin:0"><button class="btn pri" id="ok">OK</button></div></div>`;
+      document.body.appendChild(m);
+      const end = () => m.remove();
+      m.querySelector("#ok").onclick = end;
+      m.onclick = e => { if (e.target === m) end() };
+      (async () => {
+        const rows = [], add = (ok, t) => rows.push((ok ? "&#9989; " : "&#10060; ") + t);
+        add(isSecureContext, "HTTPS");
+        let mf = null;
+        try { const r = await fetch("manifest.webmanifest", { cache: "no-store" }); add(r.ok, "manifest.webmanifest"); if (r.ok) mf = await r.json() } catch (e) { add(false, "manifest.webmanifest") }
+        for (const n of ["icons/icon-192.png", "icons/icon-512.png"]) { try { const r = await fetch(n, { cache: "no-store" }); add(r.ok && /image/.test(r.headers.get("content-type") || ""), n) } catch (e) { add(false, n) } }
+        try { const r = await fetch("sw.js", { cache: "no-store" }); add(r.ok && /javascript/.test(r.headers.get("content-type") || ""), "sw.js") } catch (e) { add(false, "sw.js") }
+        try { const g = await navigator.serviceWorker.getRegistration(); add(!!g, "Service worker registered") } catch (e) { add(false, "Service worker registered") }
+        add(!/FBAN|FBAV|Instagram|Telegram|Line|wv\)/i.test(navigator.userAgent), "Normal browser (not in-app)");
+        const c = m.querySelector("#chk"); if (c) c.innerHTML = rows.join("<br>");
+      })();
+    }
+    async function installApp() {
+      if (dip) { const p = dip; dip = null; p.prompt(); try { await p.userChoice } catch (e) { } return }
+      installHelp();
+    }
+
+    /* ---------- login attempt details ---------- */
+    function devLabel() {
+      const u = navigator.userAgent; let os = "Unknown OS", m;
+      if ((m = u.match(/Android [\d.]+; ([^;)]+)/))) os = "Android (" + m[1].replace(/ Build.*/, "").trim() + ")";
+      else if (/iPhone/.test(u)) os = "iPhone"; else if (/iPad/.test(u)) os = "iPad";
+      else if (/Windows/.test(u)) os = "Windows"; else if (/Mac OS X/.test(u)) os = "macOS";
+      else if (/CrOS/.test(u)) os = "ChromeOS"; else if (/Linux/.test(u)) os = "Linux";
+      const br = /Edg\//.test(u) ? "Edge" : /OPR\/|Opera/.test(u) ? "Opera" : /Firefox|FxiOS/.test(u) ? "Firefox" : /SamsungBrowser/.test(u) ? "Samsung Internet" : /Chrome|CriOS/.test(u) ? "Chrome" : /Safari/.test(u) ? "Safari" : "Browser";
+      return br + " on " + os;
+    }
+    async function who() {
+      const o = { ua: navigator.userAgent.slice(0, 300), device: devLabel().slice(0, 100), lang: (navigator.language || "").slice(0, 20), screen: (screen.width + "x" + screen.height).slice(0, 20) };
+      try {
+        const ac = new AbortController(), t = setTimeout(() => ac.abort(), 4000);
+        const r = await fetch("https://ipwho.is/", { signal: ac.signal }); clearTimeout(t);
+        const j = await r.json();
+        if (j && j.ip) { o.ip = String(j.ip).slice(0, 64); o.city = String(j.city || "").slice(0, 60); o.country = String(j.country || "").slice(0, 60) }
+      } catch (e) { }
+      return o;
+    }
+    const WHO = who();
+    async function logAttempt(result) {
+      try { const w = await WHO; await addDoc(collection(db, "attempts"), { ...w, result, ts: serverTimestamp() }) } catch (e) { console.error(e) }
+    }
+
+    /* ---------- login / lock ---------- */
+    const W = async f => { const b = writeBatch(db); f(b); try { await b.commit() } catch (err) { alert("Save failed: " + err.code) } };
+    const SREF = () => doc(db, "auth", "state");
+    async function getState() {
+      let snap = await getDoc(SREF());
+      if (!snap.exists()) { const d0 = new Date(Date.UTC(2000, 0, 1)); await setDoc(SREF(), { count: 0, last: "fail", at: d0, okAt: d0, lockedAt: d0 }); snap = await getDoc(SREF()) }
+      return snap.data();
+    }
+    const MAXF = 5;
+    const isLocked = s => { const la = T(s.lockedAt); return s.count >= MAXF && !!la && la.getTime() + LOCK_DAYS * 864e5 > Date.now() };
+
+    async function loginView(msg = "") {
+      let s = null; try { s = await getState() } catch (e) { }
+      const locked = !!s && isLocked(s);
+      const note = locked ? "Locked for " + LOCK_DAYS + " days · Opens on " + fd(new Date(T(s.lockedAt).getTime() + LOCK_DAYS * 864e5)) : msg;
+      $.innerHTML = `<div class="login"><div class="lcard"><div class="lic" ${locked ? 'style="background:var(--rds);color:var(--rd)"' : ""}>${ic("lock")}</div>
+  <h2>Admin Access</h2><div class="mu">Sign in with your email</div>
+  <div class="field">${ic("envelope")}<input id="em" type="email" placeholder="Email" autocomplete="username" autofocus></div>
+  <div class="field">${ic("key")}<input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+  <div class="err">${esc(note)}</div>
+  ${locked ? "" : `<button class="btn pri" id="go">Sign in ${ic("arrow-right")}</button>`}
+  ${standalone() ? "" : `<div style="margin-top:14px"><a href="#" id="ins" class="mu">${ic("download")} Install app</a></div>`}
+  </div></div>`;
+      const p = document.getElementById("pw"), e0 = document.getElementById("em");
+      const ins = document.getElementById("ins"); if (ins) ins.onclick = e => { e.preventDefault(); installApp() };
+      let tm;
+      async function unlock() {
+        clearTimeout(tm);
+        const em = e0.value.trim(), pw = p.value;
+        if (busy || !/^\S+@\S+\.\S+$/.test(em) || pw.length < 6) return;
+        busy = true;
+        try {
+          await signInWithEmailAndPassword(auth, em, pw);
+          try { await updateDoc(SREF(), { count: 0, last: "fail", at: serverTimestamp(), okAt: s.okAt, lockedAt: s.lockedAt }) }
+          catch (_) { await signOut(auth).catch(() => { }); busy = false; return }
+          logAttempt("unlocked"); MODE = "auth"; PW = ""; PASS = 1000; start();
+        } catch (e) { }
+        busy = false;
+      }
+      const go = async () => {
+        if (busy) return;
+        const em = e0.value.trim();
+        if (!em || !p.value) { loginView("Enter email and password"); return }
+        busy = true;
+        try {
+          const s = await getState(), locked = isLocked(s);
+          if (locked) { busy = false; loginView(); return }
+          try { await signInWithEmailAndPassword(auth, em, p.value) }
+          catch (e) {
+            const n = s.count >= MAXF ? 1 : s.count + 1;
+            try { await updateDoc(SREF(), { count: n, last: "fail", at: serverTimestamp(), okAt: s.okAt, lockedAt: n >= MAXF ? serverTimestamp() : s.lockedAt }) } catch (_) { }
+            logAttempt(n >= MAXF ? "locked" : "wrong");
+            busy = false;
+            loginView(e.code === "auth/too-many-requests" ? "Too many attempts. Try later." : "Wrong password (" + n + "/" + MAXF + ")");
+            return;
+          }
+          await updateDoc(SREF(), { count: 0, last: "ok", at: serverTimestamp(), okAt: serverTimestamp(), lockedAt: s.lockedAt });
+          logAttempt("success");
+          MODE = "auth"; PW = ""; PASS = 1000; start();
+        } catch (e) { console.error(e); loginView("Error: " + (e.code || e.message)) }
+        busy = false;
+      };
+      if (locked) {
+        const auto = () => { clearTimeout(tm); tm = setTimeout(unlock, 900) };
+        e0.oninput = auto; p.oninput = auto;
+        p.onkeydown = e => { if (e.key === "Enter") unlock() };
+      } else {
+        document.getElementById("go").onclick = go;
+        p.onkeydown = e => { if (e.key === "Enter") go() };
+      }
+      e0.onkeydown = e => { if (e.key === "Enter") p.focus() };
+    }
+
+    function lockOut(msg) { unsubs.forEach(f => f()); unsubs = []; if (unLogs) { unLogs(); unLogs = null } PW = ""; PASS = 0; MODE = ""; devices = []; bans = {}; attempts = []; logs = []; open = null; tab = ""; curSite = ""; tSite = ""; clearSess(); signOut(auth).catch(() => { }); loginView(msg) }
+    function lock(err) { console.error(err); lockOut("Session expired. Please sign in again.") }
+
+    function start() {
+      unsubs.forEach(f => f()); unsubs = []; let saved = false;
+      unsubs.push(onSnapshot(query(collection(db, "devices"), orderBy("lastSeen", "desc"), limit(PASS)), s => { devices = s.docs.map(d => ({ id: d.id, ...d.data() })); if (!saved) { saved = true; lastTouch = Date.now(); saveSess() } render() }, lock));
+      unsubs.push(onSnapshot(query(collection(db, "bans"), limit(PASS)), s => { bans = {}; s.docs.forEach(d => bans[d.id] = { id: d.id, ...d.data() }); render() }, lock));
+      unsubs.push(onSnapshot(query(collection(db, "attempts"), orderBy("ts", "desc"), limit(PASS)), s => { attempts = s.docs.map(d => ({ id: d.id, ...d.data() })); render() }, lock));
+    }
+
+    function render() {
+      if (open && !devices.find(x => x.id === open)) { open = null; if (unLogs) { unLogs(); unLogs = null } }
+      const live = devices.filter(d => !d.trashed), trash = devices.filter(d => d.trashed);
+      const sites = [...new Set(live.map(d => d.site || "unknown"))].sort();
+      if (!["__sites", "__att", "__bans", "__trash"].includes(tab)) tab = "__sites";
+      if (curSite && !sites.includes(curSite)) curSite = "";
+      let body = "";
+      if (open) body = detailView();
+      else if (tab === "__bans") body = bansView();
+      else if (tab === "__att") body = attView();
+      else if (tab === "__trash") {
+        const ts = [...new Set(trash.map(d => d.site || "unknown"))].sort();
+        if (tSite && !ts.includes(tSite)) tSite = "";
+        if (!ts.length) body = `<div class="empty">${ic("trash-can")}Trash is empty</div>`;
+        else if (!tSite) body = ts.map(s => {
+          const n = trash.filter(d => (d.site || "unknown") === s).length;
+          return `<div class="card dev" data-a="tsite" data-v="${esc(s)}"><div class="av">${ic("globe")}</div>
+      <div class="info"><div class="top"><b>${esc(s)}</b></div><div class="meta"><span>${ic("trash-can")}${n} devices</span></div></div>${ic("chevron-right chev")}</div>`
+        }).join("");
+        else body = `<button class="btn back" data-a="tback">${ic("arrow-left")}${esc(tSite)}</button>` + trash.filter(d => (d.site || "unknown") === tSite).map(d => devCard(d, true)).join("");
+      }
+      else if (!curSite) {
+        body = sites.length ? sites.map(s => {
+          const l = live.filter(d => (d.site || "unknown") === s), n = l.filter(isOn).length;
+          return `<div class="card dev" data-a="site" data-v="${esc(s)}"><div class="av">${ic("globe")}</div>
+      <div class="info"><div class="top"><b>${esc(s)}</b>${n ? `<span class="badge ok"><span class="pulse"></span>${n} online</span>` : ""}${l.some(isNew) ? `<span class="badge nw">NEW</span>` : ""}</div>
+      <div class="meta"><span>${ic("mobile-screen")}${l.length} devices</span><span>${ic("eye")}${l.reduce((a, d) => a + (d.visits || 0), 0)} visits</span></div></div>${ic("chevron-right chev")}</div>`
+        }).join("")
+          : `<div class="empty">${ic("globe")}No websites yet</div>`;
+      } else {
+        const list = live.filter(d => (d.site || "unknown") === curSite);
+        const tv = list.reduce((a, d) => a + (d.visits || 0), 0), tt = list.reduce((a, d) => a + (d.totalTime || 0), 0);
+        body = `<button class="btn back" data-a="sback">${ic("arrow-left")}${esc(curSite)}</button><div class="stats">
+    <div class="stat"><div class="si">${ic("mobile-screen")}</div><div><b>${list.length}</b><span class="mu">Devices · ${list.filter(isOn).length} online</span></div></div>
+    <div class="stat"><div class="si">${ic("eye")}</div><div><b>${tv}</b><span class="mu">Total visits</span></div></div>
+    <div class="stat"><div class="si">${ic("hourglass-half")}</div><div><b>${dur(tt)}</b><span class="mu">Total time</span></div></div></div>` +
+          (list.length ? list.map(d => devCard(d, false)).join("") : `<div class="empty">${ic("inbox")}No devices yet</div>`);
+      }
+      const on = v => tab === v && !open ? "on" : "";
+      $.innerHTML = `<header><div class="hin"><div class="brand"><div class="logo">${ic("chart-line")}</div>Log Dashboard</div>
+  <div style="display:flex;gap:12px;align-items:center"><span class="live">Live</span>${standalone() ? "" : `<button class="btn sm" data-a="install">${ic("download")}Install</button>`}<button class="btn sm" data-a="out">${ic("right-from-bracket")}Logout</button></div></div></header>
+  <div class="tabs">
+  <button class="tab ${on("__sites")}" data-a="tab" data-v="__sites">${ic("globe")}Websites<span class="n">${sites.length}</span></button>
+  <button class="tab ${on("__att")}" data-a="tab" data-v="__att">${ic("right-to-bracket")}Attempts<span class="n">${attempts.length}</span></button>
+  <button class="tab ${on("__bans")}" data-a="tab" data-v="__bans">${ic("ban")}Banned<span class="n">${Object.keys(bans).length}</span></button>
+  <button class="tab ${on("__trash")}" data-a="tab" data-v="__trash">${ic("trash-can")}Trash<span class="n">${trash.length}</span></button></div>
+  <main>${body}</main>`;
+    }
+
+    function devCard(d, inTrash) {
+      return `<div class="card dev ${inTrash ? "trashed" : ""}" data-a="open" data-id="${esc(d.id)}">
+  <div class="av ${isBanned(d) ? "bad" : ""}">${ic(dIcon(d))}</div>
+  <div class="info">
+    <div class="top"><b>${esc(nm(d))}</b>${isBanned(d) ? `<span class="badge">${ic("ban")}BANNED</span>` : ""}${isNew(d) ? `<span class="badge nw">NEW</span>` : ""}</div>
+        <div style="margin:2px 0 4px">${stat(d)}</div>
+    ${d.alias && d.device ? `<div class="mu" style="font-size:12px">${esc(d.device)}</div>` : ""}
+    <div class="meta"><span>${ic("network-wired")}${esc(d.ip || "—")}</span><span>${ic("location-dot")}${esc(loc(d))}</span></div>
+    <div class="meta"><span>${ic("calendar-plus")}${fd(d.firstSeen)}</span><span>${ic("clock-rotate-left")}${fd(d.lastSeen)}</span></div>
+    <div class="chips"><span class="chip">${ic("eye")}${d.visits || 0} visits</span><span class="chip">${ic("hourglass-half")}${dur(d.totalTime)}</span></div>
+    ${inTrash ? `<div class="acts"><button class="btn sm grn" data-a="restore" data-id="${esc(d.id)}">${ic("rotate-left")}Restore</button>${isBanned(d) ? "" : `<button class="btn sm red" data-a="purge" data-id="${esc(d.id)}">${ic("xmark")}Delete forever</button>`}</div>` : ""}
+  </div>${inTrash ? "" : ic("chevron-right chev")}</div>`;
+    }
+
+    function detailView() {
+      const d = devices.find(x => x.id === open); if (!d) return "";
+      const n = logs.filter(l => !l.trashed).length;
+      const cell = (i, l, v) => `<div><span class="mu">${ic(i)}${l}</span><b>${v}</b></div>`;
+      return `<button class="btn back" data-a="back">${ic("arrow-left")}Back</button>
+  <div class="card"><div class="prof"><div class="av ${isBanned(d) ? "bad" : ""}">${ic(dIcon(d))}</div>
+  <div class="info"><div class="top"><b style="white-space:normal">${esc(nm(d))}</b>${isBanned(d) ? `<span class="badge">${ic("ban")}BANNED</span>` : ""}</div>
+  ${d.alias ? `<div class="mu">${ic("tag")} ${esc(d.device || "")}</div>` : ""}<div class="mu" style="word-break:break-all">${esc(d.ua || "")}</div></div></div>
+  <div class="grid">
+  ${cell("network-wired", "IP", esc(d.ip || "—"))}${cell("location-dot", "Location", esc(loc(d)))}${cell("globe", "Site", esc(d.site || "—"))}
+  ${cell("calendar-plus", "First visit", fd(d.firstSeen))}${cell("circle-dot", "Status", isOn(d) ? "Online now" : "Last online " + ago(d.lastSeen))}${cell("clock-rotate-left", "Last visit", fd(d.lastSeen))}
+  ${cell("eye", "Total visits", (d.visits || 0) + " visits")}${cell("hourglass-half", "Total time", dur(d.totalTime))}</div>
+  <div class="acts">
+  <button class="btn" data-a="rename" data-id="${esc(d.id)}">${ic("pen")}Rename</button>
+  ${bans[d.id] ? `<button class="btn grn" data-a="unban" data-id="${esc(d.id)}">${ic("unlock")}Unban device</button>` : `<button class="btn red" data-a="ban" data-id="${esc(d.id)}">${ic("ban")}Ban device</button>`}
+  ${d.ip ? (bans[ipKey(d.ip)] ? `<button class="btn grn" data-a="unban" data-id="${ipKey(d.ip)}">${ic("unlock")}Unban IP</button>` : `<button class="btn red" data-a="banip" data-id="${esc(d.id)}">${ic("network-wired")}Ban IP</button>`) : ""}
+  ${d.trashed ? `<button class="btn grn" data-a="restore" data-id="${esc(d.id)}">${ic("rotate-left")}Restore</button>` : (isBanned(d) ? "" : `<button class="btn" data-a="trash" data-id="${esc(d.id)}">${ic("trash-can")}Move to trash</button>`)}
+  </div></div>
+  <h3 class="sec">${ic("timeline")}All logs <span class="chip">${n}</span></h3>
+  ${logs.length ? `<div class="tl">` + logs.map(l => `<div class="card log ${l.trashed ? "trashed" : ""}"><div class="row"><b>${fd(l.ts)}</b><span class="chip">${ic("hourglass-half")}${dur(l.duration)}</span></div>
+  ${l.page ? `<div class="mu pg">${ic("link")} ${esc(l.page)}</div>` : ""}
+  <div class="acts" style="margin-top:8px">${l.trashed ? `<button class="btn sm grn" data-a="lrestore" data-lid="${esc(l.id)}">${ic("rotate-left")}Restore</button><button class="btn sm red" data-a="lpurge" data-lid="${esc(l.id)}">${ic("xmark")}Delete forever</button>` : `<button class="btn sm" data-a="ltrash" data-lid="${esc(l.id)}">${ic("trash-can")}Trash</button>`}</div></div>`).join("") + `</div>` : `<div class="empty">${ic("inbox")}No logs</div>`}`;
+    }
+
+    function attView() {
+      if (!attempts.length) return `<div class="empty">${ic("shield-halved")}No login attempts yet</div>`;
+      const lab = { success: "Success", unlocked: "Unlocked", wrong: "Wrong password", locked: "Locked" };
+      return attempts.map(x => {
+        const good = x.result === "success" || x.result === "unlocked";
+        return `<div class="card dev" style="cursor:default"><div class="av ${good ? "" : "bad"}">${ic(dIcon(x))}</div>
+    <div class="info"><div class="top"><b>${esc(x.device || "Unknown device")}</b><span class="badge ${good ? "ok" : ""}">${esc(lab[x.result] || x.result)}</span></div>
+    <div class="meta"><span>${ic("network-wired")}${esc(x.ip || "—")}</span><span>${ic("location-dot")}${esc(loc(x))}</span></div>
+    <div class="meta"><span>${ic("clock-rotate-left")}${fd(x.ts)}</span><span>${ic("expand")}${esc(x.screen || "—")}</span><span>${ic("language")}${esc(x.lang || "—")}</span></div>
+    <div class="mu" style="font-size:12px;word-break:break-all;margin-top:4px">${esc(x.ua || "")}</div></div>
+    <button class="btn sm red" data-a="adel" data-id="${esc(x.id)}">${ic("trash-can")}</button></div>`
+      }).join("");
+    }
+
+    function bansView() {
+      const all = Object.keys(bans).map(id => ({ ...bans[id], id }));
+      const dv = all.filter(x => x.type !== "ip"), ips = all.filter(x => x.type === "ip");
+      const list = bsub === "ip" ? ips : dv;
+      const sw = `<div class="tabs" style="padding:0 0 12px">
+  <button class="tab ${bsub === "device" ? "on" : ""}" data-a="bsub" data-v="device">${ic("mobile-screen")}Devices<span class="n">${dv.length}</span></button>
+  <button class="tab ${bsub === "ip" ? "on" : ""}" data-a="bsub" data-v="ip">${ic("network-wired")}IPs<span class="n">${ips.length}</span></button></div>`;
+      if (!list.length) return sw + `<div class="empty">${ic("shield-halved")}No one is banned</div>`;
+      return sw + list.map(x => {
+        const ip = x.type === "ip"; return `<div class="card dev" style="cursor:default"><div class="av bad">${ic(ip ? "network-wired" : "ban")}</div>
+  <div class="info"><div class="top"><b>${ip ? "IP: " + esc(x.ip) : esc(x.label || x.id)}</b><span class="badge">${ip ? "IP" : "Device"}</span></div>
+  <div class="meta"><span>${ic("globe")}${esc(x.site || "—")}</span><span>${ic("calendar")}${fd(x.at)}</span></div>
+  <div class="mu" style="margin-top:4px">${ic("message")} ${x.msg ? esc(x.msg) : "Default message"}</div></div>
+  <button class="btn sm grn" data-a="unban" data-id="${esc(x.id)}">${ic("unlock")}Unban</button></div>`
+      }).join("");
+    }
+
+    function openDevice(id) {
+      open = id; logs = []; if (unLogs) unLogs();
+      unLogs = onSnapshot(query(collection(db, "devices", id, "logs"), orderBy("ts", "desc"), limit(PASS)), s => { logs = s.docs.map(d => ({ id: d.id, ...d.data() })); render() });
+      markSeen(id);
+      render(); scrollTo(0, 0);
+    }
+
+    $.addEventListener("click", async e => {
+      const el = e.target.closest("[data-a]"); if (!el) return;
+      const a = el.dataset.a, id = el.dataset.id, lid = el.dataset.lid, d = devices.find(x => x.id === id);
+      if (a !== "open") e.stopPropagation();
+      const lref = () => doc(db, "devices", open, "logs", lid);
+      if (a === "bsub") { bsub = el.dataset.v; render() }
+      else if (a === "tab") { tab = el.dataset.v; open = null; curSite = ""; tSite = ""; if (unLogs) { unLogs(); unLogs = null } render() }
+      else if (a === "tsite") { tSite = el.dataset.v; render(); scrollTo(0, 0) }
+      else if (a === "tback") { tSite = ""; render() }
+      else if (a === "site") { curSite = el.dataset.v; render(); scrollTo(0, 0) }
+      else if (a === "sback") { curSite = ""; render() }
+      else if (a === "open") openDevice(id);
+      else if (a === "back") { open = null; if (unLogs) { unLogs(); unLogs = null } render() }
+      else if (a === "install") installApp();
+      else if (a === "out") { clearSess(); signOut(auth).catch(() => { }).finally(() => location.reload()) }
+      else if (a === "rename") { const v = await askName(nm(d)); if (v === null) return; const t = v.trim(); await W(b => b.update(doc(db, "devices", id), { alias: t ? t : deleteField() })) }
+      else if (a === "ban") {
+        const v = await askBan("Ban device"); if (v === null) return;
+        await W(b => b.set(doc(db, "bans", id), { type: "device", label: d.alias || d.device || "", site: d.site || "", msg: v.trim().slice(0, 200), at: serverTimestamp() }))
+      }
+      else if (a === "banip") {
+        const v = await askBan("Ban IP"); if (v === null) return;
+        await W(b => b.set(doc(db, "bans", ipKey(d.ip)), { type: "ip", ip: d.ip, site: d.site || "", msg: v.trim().slice(0, 200), at: serverTimestamp() }))
+      }
+      else if (a === "unban") await W(b => b.delete(doc(db, "bans", id)));
+      else if (a === "trash") { if (d && isBanned(d)) return; await W(b => b.update(doc(db, "devices", id), { trashed: true, trashedAt: serverTimestamp() })) }
+      else if (a === "restore") await W(b => b.update(doc(db, "devices", id), { trashed: false }));
+      else if (a === "purge") {
+        if (d && isBanned(d)) return; if (!confirm("This will be deleted permanently. Are you sure?")) return;
+        const s = await getDocs(query(collection(db, "devices", id, "logs"), limit(PASS)));
+        for (let i = 0; i < s.docs.length; i += 9) { const c = s.docs.slice(i, i + 9); await W(b => c.forEach(x => b.delete(x.ref))) }
+        await W(b => b.delete(doc(db, "devices", id)))
+      }
+      else if (a === "adel") await W(b => b.delete(doc(db, "attempts", id)));
+      else if (a === "ltrash") await W(b => b.update(lref(), { trashed: true, trashedAt: serverTimestamp() }));
+      else if (a === "lrestore") await W(b => b.update(lref(), { trashed: false }));
+      else if (a === "lpurge") { if (confirm("This will be deleted permanently. Are you sure?")) await W(b => b.delete(lref())) }
+    });
+
+    setInterval(() => { if (MODE && !document.querySelector(".modal")) render() }, 15000);
+    if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { }));
+    const sp = loadSess();
+    $.innerHTML = `<div class="empty">${ic("spinner fa-spin")}Loading...</div>`;
+    if (sp) {
+      auth.authStateReady().then(() => { if (auth.currentUser) { MODE = sp.m || "auth"; PASS = 1000; start() } else loginView() });
+    } else { signOut(auth).catch(() => { }); loginView() }
+  </script>
+</body>
+
+</html>
