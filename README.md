@@ -12,6 +12,22 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 
 ---
 
+## 📸 Screenshots
+
+| Login | Websites | Devices |
+|:---:|:---:|:---:|
+| <img src="screenshots/login.png" width="250" alt="Login"> | <img src="screenshots/sites.png" width="250" alt="Websites"> | <img src="screenshots/devices.png" width="250" alt="Devices"> |
+
+| Device details | Attempts | Blocked page |
+|:---:|:---:|:---:|
+| <img src="screenshots/detail.png" width="250" alt="Device details"> | <img src="screenshots/attempts.png" width="250" alt="Login attempts"> | <img src="screenshots/blocked.png" width="250" alt="Access blocked"> |
+
+<p align="center">
+  <img src="screenshots/dark.png" width="300" alt="Dark mode">
+</p>
+
+---
+
 ## ✨ Features
 
 | Feature | Details |
@@ -43,6 +59,14 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 │   ├── icon-512.png
 │   ├── favicon.ico
 │   └── favicon-32.png
+├── screenshots/          # Images used in this README
+│   ├── login.png
+│   ├── sites.png
+│   ├── devices.png
+│   ├── detail.png
+│   ├── attempts.png
+│   ├── blocked.png
+│   └── dark.png
 ├── LICENSE
 └── README.md
 ```
@@ -57,8 +81,8 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 Click **Fork** on GitHub (or **Use this template**), then clone it:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/ShadmanShakibSium/self-hosted-visitor-logs.git
+cd self-hosted-visitor-logs
 ```
 
 ### 2) Create a Firebase project
@@ -102,14 +126,14 @@ Replace the Firebase config in **both** files:
 ### 7) Replace the branding (optional)
 - Replace the files inside the `icons/` folder (`icon-192.png`, `icon-512.png`, `favicon.ico`, `favicon-32.png`) with your own. Keep the same file names, or update the paths in `index.html`, `manifest.webmanifest` and the `SHELL` list in `sw.js`.
 - Edit `name`, `short_name`, colors in `manifest.webmanifest`.
-- Bump `const V="logdash-v7"` in `sw.js` ...
+- Bump `const V="logdash-v7"` in `sw.js` whenever you change cached files, so users get the update.
 
 ### 8) Deploy the dashboard on GitHub Pages
 1. Push your changes (`git add . && git commit -m "setup" && git push`).
 2. Repo → **Settings → Pages** → Source: **Deploy from a branch** → `main` / `/ (root)` → Save.
 3. After a minute your dashboard is live at:
-   `https://YOUR_USERNAME.github.io/YOUR_REPO/`
-4. In Firebase: **Authentication → Settings → Authorized domains → Add** `YOUR_USERNAME.github.io`.
+   `https://ShadmanShakibSium.github.io/self-hosted-visitor-logs/`
+4. In Firebase: **Authentication → Settings → Authorized domains → Add** `ShadmanShakibSium.github.io`.
 
 Open the URL, sign in with the admin email/password from step 4. 🎉
 
@@ -117,7 +141,7 @@ Open the URL, sign in with the admin email/password from step 4. 🎉
 Paste this before `</body>` on every page you want to track:
 
 ```html
-<script src="https://YOUR_USERNAME.github.io/YOUR_REPO/tracker.js" data-site="My Website" defer></script>
+<script src="https://ShadmanShakibSium.github.io/self-hosted-visitor-logs/tracker.js" data-site="My Website" defer></script>
 ```
 
 - `data-site` = the name shown as a group in the dashboard. If empty, the hostname is used.
@@ -126,7 +150,7 @@ Paste this before `</body>` on every page you want to track:
 Visit your site once, then refresh the dashboard — the device appears under **Websites → My Website**.
 
 ### 10) (Recommended) Restrict your API key
-Google Cloud Console → **APIs & Services → Credentials →** your *Browser key* → **Application restrictions → Websites** → add every domain that runs `tracker.js` plus your dashboard domain (e.g. `https://YOUR_USERNAME.github.io/*`).
+Google Cloud Console → **APIs & Services → Credentials →** your *Browser key* → **Application restrictions → Websites** → add every domain that runs `tracker.js` plus your dashboard domain (e.g. `https://ShadmanShakibSium.github.io/*`).
 > The web API key is not a secret by design, but restricting it reduces abuse.
 
 ---
@@ -191,6 +215,7 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 | Can't sign in | Email/Password provider enabled? User exists? Not locked? |
 | "Locked for 24 days" | Enter the correct email + password on the lock screen — it unlocks automatically |
 | Install button doesn't work | Needs HTTPS, valid `manifest.webmanifest`, icons and `sw.js`. Open in Chrome/Safari (not in-app browsers). The Install dialog shows a checklist |
+| Icons not showing | Check the `icons/` folder name and the paths in `index.html`, `manifest.webmanifest` and `sw.js` |
 | Old version after update | Bump `V` in `sw.js`, hard-refresh |
 | IP/location missing | Ad-blockers may block `ipwho.is`; the tracker then continues without it |
 
@@ -198,7 +223,7 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 
 ## 🐞 Found a bug? Need help?
 
-1. **First choice:** open a [GitHub Issue](https://github.com/YOUR_USERNAME/YOUR_REPO/issues) with
+1. **First choice:** open a [GitHub Issue](https://github.com/ShadmanShakibSium/self-hosted-visitor-logs/issues) with
    what you did, what you expected, what happened, and your browser/device. Please **never** paste
    your API keys, UID or private logs.
 2. **Security problems** (for example, a way to read the logs without logging in): please **don't**
@@ -208,9 +233,10 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 
 | | |
 |---|---|
-| 📧 Email | [your-email@example.com](mailto:mdshadmanshakibsium.com) |
-| 🐙 GitHub | [@YOUR_USERNAME](https://github.com/ShadmanShakibSium) |
-| 📸 Instagram | [@YOUR_HANDLE](https://instagram.com/shadman_shakib_sium) |
+| 📧 Email | [mdshadmanshakibsium@gmail.com](mailto:mdshadmanshakibsium@gmail.com) |
+| 🐙 GitHub | [@ShadmanShakibSium](https://github.com/ShadmanShakibSium) |
+| 📸 Instagram | [সাদমান সাকিব](https://instagram.com/shadman_shakib_sium) |
+| 💬 Discord | [Message me on Discord](https://discord.com/users/1267359105492844545) |
 
 ⭐ If this project helped you, please give the repo a star!
 
