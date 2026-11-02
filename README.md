@@ -73,8 +73,6 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 └── README.md
 ```
 
-> `sw.js` must contain the code **once** only (make sure it isn't pasted twice).
-
 ---
 
 ## 🚀 Setup (step by step)
@@ -134,7 +132,7 @@ Replace the Firebase config in **both** files:
 1. Push your changes (`git add . && git commit -m "setup" && git push`).
 2. Repo → **Settings → Pages** → Source: **Deploy from a branch** → `main` / `/ (root)` → Save.
 3. After a minute your dashboard is live at:
-   `https://ShadmanShakibSium.github.io/self-hosted-visitor-logs/`
+   `https://YOUR_USERNAME.github.io/self-hosted-visitor-logs/`
 4. In Firebase: **Authentication → Settings → Authorized domains → Add** `ShadmanShakibSium.github.io`.
 
 Open the URL, sign in with the admin email/password from step 4. 🎉
@@ -143,7 +141,7 @@ Open the URL, sign in with the admin email/password from step 4. 🎉
 Paste this before `</body>` on every page you want to track:
 
 ```html
-<script src="https://ShadmanShakibSium.github.io/self-hosted-visitor-logs/tracker.js" data-site="My Website" defer></script>
+<script src="https://YOUR_USERNAME.github.io/self-hosted-visitor-logs/tracker.js" data-site="My Website" defer></script>
 ```
 
 - `data-site` = the name shown as a group in the dashboard. If empty, the hostname is used.
