@@ -39,7 +39,7 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 | Live status | "Online now" / "Last online X ago" |
 | IP + location | Via `ipwho.is` (fallback `ipify`) |
 | Ban system | Ban by device or by IP, with custom "Access blocked" message, applied live |
-| Login protection | 5 wrong passwords → login locked for 24 days. While locked, the Sign in button is hidden, but **the admin can still unlock** by typing the correct admin email + password on the lock screen (checked automatically, no button needed) |
+| Login protection | 5 wrong passwords → login locked for 24 days. While locked, the Sign in button is hidden and the admin account **cannot** log in. Only a separate **unlock-only account** can lift the lock (see [Lock & unlock](#-lock--unlock-how-it-works)) |
 | Login attempt log | Every attempt with device, IP, location |
 | Trash | Soft-delete devices/logs, restore, or delete forever |
 | PWA | Installable, offline shell via service worker |
@@ -75,6 +75,25 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 
 ---
 
+## 🔑 The two-account design (read this first)
+
+This project uses **exactly two** Firebase Authentication users:
+
+| Account | Used for | Can read/manage logs? | Can unlock a locked dashboard? |
+|---|---|:---:|:---:|
+| **Admin account** | Your daily dashboard login | ✅ Yes (when not locked) | ❌ No |
+| **Unlock account** | Only to lift the 24-day lock | ❌ No (all reads/writes denied) | ✅ Yes, **only while locked** |
+
+Why two accounts?
+
+- If the unlock account could also sign in normally, anyone who knows it could open the dashboard. So the rules make it **useless for everything except unlocking**.
+- If you use the unlock account on the normal login screen, the dashboard answers **"Wrong password"** and counts it as a failed attempt. This is intentional.
+- If you type the **admin** account on the lock screen, **nothing happens**. The admin account cannot unlock.
+
+Use **different, strong passwords** for the two accounts (minimum 6 characters each).
+
+---
+
 ## 🚀 Setup (step by step)
 
 ### 1) Get the code
@@ -104,18 +123,28 @@ cd self-hosted-visitor-logs
 ### 3) Create the database
 **Build → Firestore Database → Create database** → pick a location → start in **production mode**.
 
-### 4) Create your ONE admin account
+### 4) Create the TWO accounts
 1. **Build → Authentication → Get started → Sign-in method → Email/Password → Enable.**
-2. **Users → Add user** → enter your email + a **strong password** (this is your dashboard login).
-3. Copy that user's **User UID** (shown in the Users table).
-4. 🔒 **Block public sign-up** (very important): **Authentication → Settings → User actions → untick "Enable create (sign-up)"**.
-   The rules treat **any signed-in user** as an admin (while the dashboard is not locked), so your admin account must be the **only** account in the project. Disabling sign-up guarantees that.
+2. **Users → Add user** → create the **Admin account** (your email + a strong password). This is your normal dashboard login.
+3. **Users → Add user** → create the **Unlock account** (a different email, e.g. `unlock@yourdomain.com`, + a different strong password). The email does not need to be a real inbox.
+4. Copy the **User UID of the Unlock account** (shown in the Users table). You need **only this one**. The admin UID is not used anywhere.
+5. 🔒 **Block public sign-up** (very important): **Authentication → Settings → User actions → untick "Enable create (sign-up)"**.
+   The rules treat **any signed-in user except the unlock account** as an admin (while the dashboard is not locked). So these two accounts must be the **only** accounts in the project. Disabling sign-up guarantees that.
 
 ### 5) Add the security rules
-Open `firestore.rules`, replace the `YOUR_ADMIN_UID` placeholder (inside the `unlocker()` function) with the UID from step 4, then paste the whole file into
-**Firestore → Rules → Publish**.
+1. Open `firestore.rules`.
+2. Find the `unlocker()` function and replace `YOUR_UNLOCK_UID` with the **Unlock account's UID** (step 4.4). Do **not** put the admin UID here.
+3. Copy the whole file into **Firestore → Rules** and press **Publish**.
 
-What the UID is used for: **only the account with this UID can unlock** a locked dashboard (see [Lock](#-using-the-dashboard)). Everything else (reading logs, banning, trashing) is allowed for any signed-in user, which is safe only if you keep sign-up disabled and have just one user.
+What the rules do:
+
+| Rule | Meaning |
+|---|---|
+| `admin()` | Signed in, dashboard **not locked**, and **not** the unlock account |
+| `unlocker()` | Signed in as the unlock account (the UID you set) |
+| Wrong-password counter | Anyone can add +1 (needed before login); the 5th failure sets the lock |
+| Successful-login reset | Any signed-in user **except** the unlock account, only when not locked |
+| Unlock (reset to 0) | **Only** the unlock account, **only while locked** |
 
 ### 6) Put your config into the code
 Replace the Firebase config in **both** files:
@@ -126,16 +155,16 @@ Replace the Firebase config in **both** files:
 ### 7) Replace the branding (optional)
 - Replace the files inside the `icons/` folder (`icon-192.png`, `icon-512.png`, `favicon.ico`, `favicon-32.png`) with your own. Keep the same file names, or update the paths in `index.html`, `manifest.webmanifest` and the `SHELL` list in `sw.js`.
 - Edit `name`, `short_name`, colors in `manifest.webmanifest`.
-- Bump `const V="logdash-v7"` in `sw.js` whenever you change cached files, so users get the update.
+- Bump `const V="logdash-v8"` in `sw.js` (e.g. to `logdash-v9`) whenever you change cached files, so users get the update.
 
 ### 8) Deploy the dashboard on GitHub Pages
 1. Push your changes (`git add . && git commit -m "setup" && git push`).
 2. Repo → **Settings → Pages** → Source: **Deploy from a branch** → `main` / `/ (root)` → Save.
 3. After a minute your dashboard is live at:
    `https://YOUR_USERNAME.github.io/self-hosted-visitor-logs/`
-4. In Firebase: **Authentication → Settings → Authorized domains → Add** `ShadmanShakibSium.github.io`.
+4. In Firebase: **Authentication → Settings → Authorized domains → Add** `YOUR_USERNAME.github.io`.
 
-Open the URL, sign in with the admin email/password from step 4. 🎉
+Open the URL, sign in with the **Admin account** from step 4. 🎉
 
 ### 9) Track your websites
 Paste this before `</body>` on every page you want to track:
@@ -150,8 +179,45 @@ Paste this before `</body>` on every page you want to track:
 Visit your site once, then refresh the dashboard — the device appears under **Websites → My Website**.
 
 ### 10) (Recommended) Restrict your API key
-Google Cloud Console → **APIs & Services → Credentials →** your *Browser key* → **Application restrictions → Websites** → add every domain that runs `tracker.js` plus your dashboard domain (e.g. `https://ShadmanShakibSium.github.io/*`).
+Google Cloud Console → **APIs & Services → Credentials →** your *Browser key* → **Application restrictions → Websites** → add every domain that runs `tracker.js` plus your dashboard domain (e.g. `https://YOUR_USERNAME.github.io/*`).
 > The web API key is not a secret by design, but restricting it reduces abuse.
+
+---
+
+## 🔒 Lock & unlock (how it works)
+
+### What triggers the lock
+Every wrong password on the normal login screen adds **+1** to a counter stored in Firestore (`auth/state`). On the **5th** wrong password (`MAXF`), the dashboard is locked for `LOCK_DAYS` (default **24 days**). This counts attempts from any device, and it also counts the **unlock account** if someone uses it on the normal login screen.
+
+### What you see while locked
+- The login screen shows **"Locked for 24 days · Opens on `<date>`"**.
+- The **Sign in button is hidden**.
+- The admin account cannot sign in, even with the correct password.
+
+### How to unlock (step by step)
+1. Open the dashboard. You see the lock screen.
+2. In the **Email** field type the **Unlock account's email**.
+3. In the **Password** field type the **Unlock account's password**.
+4. **Wait about 1 second.** There is no button; it checks automatically.
+5. If correct, the counter resets to 0 and you see **"Unlocked. Now sign in with your admin account."**
+6. Now sign in normally with the **Admin account**.
+
+### What happens in every situation
+
+| Situation | Result |
+|---|---|
+| Locked, unlock account typed on the lock screen | ✅ Unlocks, then shows the normal login screen |
+| Locked, **admin** account typed on the lock screen | Nothing happens (rejected by the rules) |
+| Locked, wrong email/password typed | Nothing happens, nothing is counted |
+| **Not** locked, unlock account used on the login screen | ❌ "Wrong password (n/5)", counts toward the lock |
+| Not locked, admin account + correct password | ✅ Dashboard opens, counter resets to 0 |
+| Not locked, wrong password | "Wrong password (n/5)" |
+| Lock screen left open and the lock expires | Automatically returns to the normal login screen |
+
+> ⚠️ Never use the unlock account on the normal login screen. It is only for the lock screen.
+
+### Auto-expiry
+If nobody unlocks it, the lock ends by itself after `LOCK_DAYS`, and the next wrong password restarts the counter from 1.
 
 ---
 
@@ -161,10 +227,9 @@ Google Cloud Console → **APIs & Services → Credentials →** your *Browser k
 - **Rename** a device to a friendly alias.
 - **Ban device / Ban IP** → the visitor instantly sees an "Access blocked" page with your message. **Unban** from the device page or the **Banned** tab.
 - **Trash** → soft-delete; restore or delete forever (banned devices can't be deleted).
-- **Attempts** → every login attempt (success, wrong password, locked).
+- **Attempts** → every login attempt (success, wrong password, locked, unlocked).
 - **Session** auto-expires after inactivity (`SESSION_MIN` in `index.html`, default 2 min).
-- **Lock** → 5 wrong passwords lock login for `LOCK_DAYS` (default 24 days). The lock screen shows "Locked for 24 days · Opens on `<date>`" and **hides the Sign in button**.
-  **To unlock:** type your correct **admin email and password** in the two fields and wait about a second. There is no button to press. It verifies automatically and, if correct, resets the counter and opens the dashboard. Wrong credentials are silently ignored (nothing is counted while locked). Only the admin account (the UID set in `unlocker()` in `firestore.rules`) can unlock.
+- **Lock / unlock** → see [Lock & unlock](#-lock--unlock-how-it-works).
 
 ---
 
@@ -173,12 +238,13 @@ Google Cloud Console → **APIs & Services → Credentials →** your *Browser k
 | What | Where |
 |---|---|
 | Firebase config | `index.html`, `tracker.js` |
-| Who can unlock a locked dashboard | `unlocker()` in `firestore.rules` (your admin UID) |
+| Unlock account UID | `unlocker()` in `firestore.rules` (**the unlock account's UID, not the admin's**) |
 | Session timeout | `SESSION_MIN` in `index.html` |
 | Max failed logins / lock days | `MAXF`, `LOCK_DAYS` in `index.html` **and** the numbers `5` / `24` in `firestore.rules` (keep them identical) |
 | "Online" threshold | `ONLINE_MS` in `index.html` |
 | Default block message | `DEFAULT_MSG` in `tracker.js` |
 | Time-on-page flush interval | `setInterval(flush, 30000)` in `tracker.js` |
+| Service worker cache version | `V` in `sw.js` |
 
 ---
 
@@ -189,11 +255,13 @@ The Spark plan allows roughly 50k reads / 20k writes per day. `tracker.js` write
 
 ## 🔐 Security & limitations (please read)
 
-- **One account only.** Any signed-in user can read and manage the data while the dashboard is not locked. Keep public sign-up disabled, have only your admin user in Firebase Authentication, and use a strong, unique password.
-- Failed-login counting is stored in Firestore and is **publicly writable by design** (needed so the lock works before login). Someone could deliberately trigger the lock by entering 5 wrong passwords. That is harmless for you: the lock only hides the normal Sign in button. **You (the admin) can always unlock** by typing your correct email + password on the lock screen (see [Lock](#-using-the-dashboard)). Nobody else can unlock it, because the `unlocker()` rule in `firestore.rules` trusts only your UID.
+- **Two accounts only.** Any signed-in user except the unlock account can read and manage the data while the dashboard is not locked. Keep public sign-up disabled, keep only the admin and unlock users in Firebase Authentication, and use strong, unique passwords.
+- The unlock account is **powerless except for unlocking**: it cannot read logs, devices, bans or attempts, and it can only reset the counter while the dashboard is locked.
+- Failed-login counting is stored in Firestore and is **publicly writable by design** (needed so the lock works before login). Someone could deliberately trigger the lock by entering 5 wrong passwords. That is harmless for you: you simply unlock with the unlock account (see [Lock & unlock](#-lock--unlock-how-it-works)). Nobody else can unlock it, because the `unlocker()` rule trusts only that one UID.
 - Bans are enforced **client-side** by `tracker.js`. A visitor who blocks scripts or the tracker is not blocked. This is *not* a firewall.
 - Device IDs live in the visitor's `localStorage`; clearing it creates a "new" device.
 - Anyone can create device/log documents (that's how tracking works), so data can be spammed. Treat statistics as indicative, not exact.
+- Firebase Auth also has its own brute-force protection. After many bad attempts it may answer "Too many attempts. Try later." Wait a while and retry.
 
 ## ⚖️ Privacy & legal
 
@@ -211,13 +279,16 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 
 | Problem | Fix |
 |---|---|
-| `Save failed: permission-denied` | Rules not published, or the dashboard is locked, or you are not signed in |
+| `Save failed: permission-denied` | Rules not published, the dashboard is locked, you are not signed in, or you are signed in with the unlock account |
 | Dashboard empty after tracking | Check browser console on the tracked site; confirm config is identical in `tracker.js`; check API-key referrer restrictions |
-| Can't sign in | Email/Password provider enabled? User exists? Not locked? |
-| "Locked for 24 days" | The Sign in button is hidden while locked. Type your correct admin email + password in the fields and wait ~1 second; there is no button to press. It unlocks automatically and opens the dashboard. If nothing happens, check the email/password and that the UID in `unlocker()` in `firestore.rules` matches your admin account's UID |
+| Can't sign in | Email/Password provider enabled? User exists? Not locked? Using the **admin** account (not the unlock account)? |
+| "Locked for 24 days" | Type the **unlock account's** email + password on the lock screen and wait ~1 second (no button). See [Lock & unlock](#-lock--unlock-how-it-works) |
+| Typing the admin account on the lock screen does nothing | Expected. Only the unlock account can unlock |
+| Unlock account says "Wrong password" on the normal login | Expected. It is for the lock screen only. Each try counts as a failed attempt |
+| Unlock does nothing | Check: (1) email/password are the unlock account's and at least 6 characters, (2) `unlocker()` in `firestore.rules` holds the **unlock** account's UID, (3) the rules were **published**, (4) the dashboard is actually locked (counter at 5 and not expired) |
+| Works on desktop but old behaviour on phone | Cached old version. Bump `V` in `sw.js`, redeploy, close the app, reopen (or reinstall the PWA) |
 | Install button doesn't work | Needs HTTPS, valid `manifest.webmanifest`, icons and `sw.js`. Open in Chrome/Safari (not in-app browsers). The Install dialog shows a checklist |
 | Icons not showing | Check the `icons/` folder name and the paths in `index.html`, `manifest.webmanifest` and `sw.js` |
-| Old version after update | Bump `V` in `sw.js`, hard-refresh |
 | IP/location missing | Ad-blockers may block `ipwho.is`; the tracker then continues without it |
 
 ---
@@ -226,7 +297,7 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 
 1. **First choice:** open a [GitHub Issue](https://github.com/ShadmanShakibSium/self-hosted-visitor-logs/issues) with
    what you did, what you expected, what happened, and your browser/device. Please **never** paste
-   your API keys, UID or private logs.
+   your API keys, UIDs, passwords or private logs.
 2. **Security problems** (for example, a way to read the logs without logging in): please **don't**
    open a public issue. Email me privately instead.
 
