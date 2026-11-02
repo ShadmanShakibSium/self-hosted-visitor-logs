@@ -39,7 +39,7 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 | Live status | "Online now" / "Last online X ago" |
 | IP + location | Via `ipwho.is` (fallback `ipify`) |
 | Ban system | Ban by device or by IP, with custom "Access blocked" message, applied live |
-| Login protection | 5 wrong passwords → dashboard locked for 24 days (unlock by correct login) |
+| Login protection | 5 wrong passwords → login locked for 24 days. While locked, the Sign in button is hidden, but **the admin can still unlock** by typing the correct admin email + password on the lock screen (checked automatically, no button needed) |
 | Login attempt log | Every attempt with device, IP, location |
 | Trash | Soft-delete devices/logs, restore, or delete forever |
 | PWA | Installable, offline shell via service worker |
@@ -109,13 +109,13 @@ cd self-hosted-visitor-logs
 2. **Users → Add user** → enter your email + a **strong password** (this is your dashboard login).
 3. Copy that user's **User UID** (shown in the Users table).
 4. 🔒 **Block public sign-up** (very important): **Authentication → Settings → User actions → untick "Enable create (sign-up)"**.
-   (Even if you can't find this option, step 5 below still protects you, because the rules only trust your UID.)
+   The rules treat **any signed-in user** as an admin (while the dashboard is not locked), so your admin account must be the **only** account in the project. Disabling sign-up guarantees that.
 
 ### 5) Add the security rules
-Open `firestore.rules`, replace the `YOUR_ADMIN_UID` placeholder with the UID from step 4, then paste the whole file into
+Open `firestore.rules`, replace the `YOUR_ADMIN_UID` placeholder (inside the `unlocker()` function) with the UID from step 4, then paste the whole file into
 **Firestore → Rules → Publish**.
 
-The rules only treat **your UID** as admin. Without this, *any* person who can create a Firebase account with your public API key could read your logs.
+What the UID is used for: **only the account with this UID can unlock** a locked dashboard (see [Lock](#-using-the-dashboard)). Everything else (reading logs, banning, trashing) is allowed for any signed-in user, which is safe only if you keep sign-up disabled and have just one user.
 
 ### 6) Put your config into the code
 Replace the Firebase config in **both** files:
@@ -163,7 +163,8 @@ Google Cloud Console → **APIs & Services → Credentials →** your *Browser k
 - **Trash** → soft-delete; restore or delete forever (banned devices can't be deleted).
 - **Attempts** → every login attempt (success, wrong password, locked).
 - **Session** auto-expires after inactivity (`SESSION_MIN` in `index.html`, default 2 min).
-- **Lock** → 5 wrong passwords lock login for `LOCK_DAYS` (default 24 days). Signing in with the correct credentials on the lock screen unlocks it.
+- **Lock** → 5 wrong passwords lock login for `LOCK_DAYS` (default 24 days). The lock screen shows "Locked for 24 days · Opens on `<date>`" and **hides the Sign in button**.
+  **To unlock:** type your correct **admin email and password** in the two fields and wait about a second. There is no button to press. It verifies automatically and, if correct, resets the counter and opens the dashboard. Wrong credentials are silently ignored (nothing is counted while locked). Only the admin account (the UID set in `unlocker()` in `firestore.rules`) can unlock.
 
 ---
 
@@ -172,7 +173,7 @@ Google Cloud Console → **APIs & Services → Credentials →** your *Browser k
 | What | Where |
 |---|---|
 | Firebase config | `index.html`, `tracker.js` |
-| Admin UID | `firestore.rules` |
+| Who can unlock a locked dashboard | `unlocker()` in `firestore.rules` (your admin UID) |
 | Session timeout | `SESSION_MIN` in `index.html` |
 | Max failed logins / lock days | `MAXF`, `LOCK_DAYS` in `index.html` **and** the numbers `5` / `24` in `firestore.rules` (keep them identical) |
 | "Online" threshold | `ONLINE_MS` in `index.html` |
@@ -188,8 +189,8 @@ The Spark plan allows roughly 50k reads / 20k writes per day. `tracker.js` write
 
 ## 🔐 Security & limitations (please read)
 
-- **Admin = your UID only.** Keep sign-up disabled and use a strong, unique password.
-- Failed-login counting is stored in Firestore and is **publicly writable by design** (needed so the lock works before login). This means someone could deliberately trigger the lock. Your account is then locked until you unlock it on the lock screen with correct credentials.
+- **One account only.** Any signed-in user can read and manage the data while the dashboard is not locked. Keep public sign-up disabled, have only your admin user in Firebase Authentication, and use a strong, unique password.
+- Failed-login counting is stored in Firestore and is **publicly writable by design** (needed so the lock works before login). Someone could deliberately trigger the lock by entering 5 wrong passwords. That is harmless for you: the lock only hides the normal Sign in button. **You (the admin) can always unlock** by typing your correct email + password on the lock screen (see [Lock](#-using-the-dashboard)). Nobody else can unlock it, because the `unlocker()` rule in `firestore.rules` trusts only your UID.
 - Bans are enforced **client-side** by `tracker.js`. A visitor who blocks scripts or the tracker is not blocked. This is *not* a firewall.
 - Device IDs live in the visitor's `localStorage`; clearing it creates a "new" device.
 - Anyone can create device/log documents (that's how tracking works), so data can be spammed. Treat statistics as indicative, not exact.
@@ -210,10 +211,10 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 
 | Problem | Fix |
 |---|---|
-| `Save failed: permission-denied` | Rules not published, or UID in rules ≠ your account's UID |
+| `Save failed: permission-denied` | Rules not published, or the dashboard is locked, or you are not signed in |
 | Dashboard empty after tracking | Check browser console on the tracked site; confirm config is identical in `tracker.js`; check API-key referrer restrictions |
 | Can't sign in | Email/Password provider enabled? User exists? Not locked? |
-| "Locked for 24 days" | Enter the correct email + password on the lock screen — it unlocks automatically |
+| "Locked for 24 days" | The Sign in button is hidden while locked. Type your correct admin email + password in the fields and wait ~1 second; there is no button to press. It unlocks automatically and opens the dashboard. If nothing happens, check the email/password and that the UID in `unlocker()` in `firestore.rules` matches your admin account's UID |
 | Install button doesn't work | Needs HTTPS, valid `manifest.webmanifest`, icons and `sw.js`. Open in Chrome/Safari (not in-app browsers). The Install dialog shows a checklist |
 | Icons not showing | Check the `icons/` folder name and the paths in `index.html`, `manifest.webmanifest` and `sw.js` |
 | Old version after update | Bump `V` in `sw.js`, hard-refresh |
