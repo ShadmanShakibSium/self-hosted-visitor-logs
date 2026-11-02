@@ -7,10 +7,11 @@ service cloud.firestore {
       return st().count >= 5 && st().lockedAt + duration.value(24, 'd') > request.time;
     }
 
-    function admin() { return request.auth != null && !locked(); }
-    // ⚠️ Replace YOUR_ADMIN_UID with your Firebase Auth user UID
-    // (Authentication -> Users -> User UID)
-    function unlocker() { return request.auth != null && request.auth.uid == 'YOUR_ADMIN_UID'; }
+    // Unlock-only account: put its UID here (NOT the admin account's UID)
+    function unlocker() { return request.auth != null && request.auth.uid == 'YOUR_UNLOCK_UID'; }
+
+    // Admin = any signed-in user, when not locked, except the unlock-only account
+    function admin() { return request.auth != null && !locked() && !unlocker(); }
 
     match /auth/state {
       allow get: if true;
@@ -24,6 +25,7 @@ service cloud.firestore {
                     && request.resource.data.at == request.time
                     && (
 
+                      // wrong password: count +1, lock on the 5th
                       (!locked() && request.resource.data.last == 'fail'
                         && request.resource.data.okAt == resource.data.okAt
                         && request.resource.data.count == (resource.data.count >= 5 ? 1 : resource.data.count + 1)
@@ -31,12 +33,14 @@ service cloud.firestore {
                             ? request.resource.data.lockedAt == request.time
                             : request.resource.data.lockedAt == resource.data.lockedAt))
 
-                      || (request.auth != null && !locked() && request.resource.data.last == 'ok'
+                      // successful normal login: reset counter (not for the unlock-only account)
+                      || (request.auth != null && !locked() && !unlocker() && request.resource.data.last == 'ok'
                         && request.resource.data.count == 0
                         && request.resource.data.okAt == request.time
                         && request.resource.data.lockedAt == resource.data.lockedAt)
 
-                      || (unlocker() && request.resource.data.count == 0
+                      // unlock: only the unlock-only account, and ONLY while locked
+                      || (unlocker() && locked() && request.resource.data.count == 0
                         && request.resource.data.okAt == resource.data.okAt
                         && request.resource.data.lockedAt == resource.data.lockedAt)
                     );
