@@ -196,6 +196,26 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 
 ---
 
+## 🐞 Found a bug? Need help?
+
+1. **First choice:** open a [GitHub Issue](https://github.com/YOUR_USERNAME/YOUR_REPO/issues) with
+   what you did, what you expected, what happened, and your browser/device. Please **never** paste
+   your API keys, UID or private logs.
+2. **Security problems** (for example, a way to read the logs without logging in): please **don't**
+   open a public issue. Email me privately instead.
+
+## 📬 Contact
+
+| | |
+|---|---|
+| 📧 Email | [your-email@example.com](mailto:mdshadmanshakibsium.com) |
+| 🐙 GitHub | [@YOUR_USERNAME](https://github.com/ShadmanShakibSium) |
+| 📸 Instagram | [@YOUR_HANDLE](https://instagram.com/shadman_shakib_sium) |
+
+⭐ If this project helped you, please give the repo a star!
+
+---
+
 ## 🤝 Contributing
 Issues and pull requests are welcome. Please never commit real credentials, UIDs or user data.
 
