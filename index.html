@@ -731,8 +731,8 @@
     const ic = n => `<i class="fa-solid fa-${n}"></i>`;
     const dIcon = d => { const u = ((d.device || "") + " " + (d.ua || "")).toLowerCase(); return /ipad|tablet/.test(u) ? "tablet-screen-button" : /mobile|android|iphone/.test(u) ? "mobile-screen" : "desktop" };
     const loc = d => [d.city, d.country].filter(Boolean).join(", ") || "—";
-    const ONLINE_MS = 70000;
-    const isOn = d => { const t = T(d.lastSeen); return !!t && Date.now() - t.getTime() < ONLINE_MS };
+    const ONLINE_MS = 50000;
+    const isOn = d => { const t = T(d.lastSeen); return d.online !== false && !!t && Date.now() - t.getTime() < ONLINE_MS };
     const ago = t => {
       const d = T(t); if (!d) return "—"; const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
       if (s < 60) return s + " sec ago"; const m = Math.floor(s / 60); if (m < 60) return m + " min ago";
