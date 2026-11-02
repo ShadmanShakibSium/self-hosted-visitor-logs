@@ -18,13 +18,9 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 |:---:|:---:|:---:|
 | <img src="screenshots/login.png" width="250" alt="Login"> | <img src="screenshots/sites.png" width="250" alt="Websites"> | <img src="screenshots/devices.png" width="250" alt="Devices"> |
 
-| Device details | Attempts | Blocked page |
+| Device details | Attempts | Blocked page | Blocked page use POV |
 |:---:|:---:|:---:|
-| <img src="screenshots/detail.png" width="250" alt="Device details"> | <img src="screenshots/attempts.png" width="250" alt="Login attempts"> | <img src="screenshots/blocked.png" width="250" alt="Access blocked"> |
-
-<p align="center">
-  <img src="screenshots/dark.png" width="300" alt="Dark mode">
-</p>
+| <img src="screenshots/detail.png" width="250" alt="Device details"> | <img src="screenshots/attempts.png" width="250" alt="Login attempts"> | <img src="screenshots/blocked.png" width="250" alt="Access blocked"> | <img src="screenshots/blocked2.png" width="250" alt="Access blocked"> |
 
 ---
 
