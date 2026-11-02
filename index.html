@@ -661,12 +661,12 @@
     import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
     const app = initializeApp({
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyDASut3M99bMgmQK_V4Xk12zyMGMPMArcM",
+      authDomain: "logweb-27703.firebaseapp.com",
+      projectId: "logweb-27703",
+      storageBucket: "logweb-27703.firebasestorage.app",
+      messagingSenderId: "430930872770",
+      appId: "1:430930872770:web:3a709d412daab76a79ae5b"
     });
     let PASS = 0, PW = "", MODE = "", bsub = "device", tSite = "";
     const db = getFirestore(app);
@@ -837,10 +837,16 @@
         if (busy || !/^\S+@\S+\.\S+$/.test(em) || pw.length < 6) return;
         busy = true;
         try {
+          const cur = await getState();
+          if (!isLocked(cur)) { busy = false; loginView(); return }
           await signInWithEmailAndPassword(auth, em, pw);
-          try { await updateDoc(SREF(), { count: 0, last: "fail", at: serverTimestamp(), okAt: s.okAt, lockedAt: s.lockedAt }) }
+          try { await updateDoc(SREF(), { count: 0, last: "fail", at: serverTimestamp(), okAt: cur.okAt, lockedAt: cur.lockedAt }) }
           catch (_) { await signOut(auth).catch(() => { }); busy = false; return }
-          logAttempt("unlocked"); MODE = "auth"; PW = ""; PASS = 1000; start();
+          logAttempt("unlocked");
+          await signOut(auth).catch(() => { });
+          busy = false;
+          loginView("Unlocked. Now sign in with your admin account.");
+          return;
         } catch (e) { }
         busy = false;
       }
@@ -850,15 +856,22 @@
         if (!em || !p.value) { loginView("Enter email and password"); return }
         busy = true;
         try {
-          const s = await getState(), locked = isLocked(s);
-          if (locked) { busy = false; loginView(); return }
-          try { await signInWithEmailAndPassword(auth, em, p.value) }
-          catch (e) {
+          const s = await getState();
+          if (isLocked(s)) { busy = false; loginView(); return }
+          let bad = null;
+          try {
+            await signInWithEmailAndPassword(auth, em, p.value);
+            try { await getDocs(query(collection(db, "devices"), limit(1))) }
+            catch (e2) {
+              if (e2.code === "permission-denied") { await signOut(auth).catch(() => { }); bad = { code: "auth/invalid-credential" } }
+            }
+          } catch (e) { bad = e }
+          if (bad) {
             const n = s.count >= MAXF ? 1 : s.count + 1;
             try { await updateDoc(SREF(), { count: n, last: "fail", at: serverTimestamp(), okAt: s.okAt, lockedAt: n >= MAXF ? serverTimestamp() : s.lockedAt }) } catch (_) { }
             logAttempt(n >= MAXF ? "locked" : "wrong");
             busy = false;
-            loginView(e.code === "auth/too-many-requests" ? "Too many attempts. Try later." : "Wrong password (" + n + "/" + MAXF + ")");
+            loginView(bad.code === "auth/too-many-requests" ? "Too many attempts. Try later." : "Wrong password (" + n + "/" + MAXF + ")");
             return;
           }
           await updateDoc(SREF(), { count: 0, last: "ok", at: serverTimestamp(), okAt: serverTimestamp(), lockedAt: s.lockedAt });
