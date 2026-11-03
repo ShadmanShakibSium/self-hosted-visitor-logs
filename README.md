@@ -7,6 +7,9 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 - Backend = your own **Firebase Firestore + Firebase Auth** (free Spark plan is enough for small sites)
 - No server to run, no build step, no npm
 - Dark/light mode, mobile-first, installable as an app
+- Android-style swipe-back gesture for navigating inside the single-page dashboard
+- Permanently block a login device or IP, with live enforcement
+- Instant popup alert when someone tries a wrong password
 
 > ⚠️ **You must use your own Firebase project.** Never share or reuse someone else's Firebase config. Follow the setup below.
 
@@ -44,7 +47,12 @@ Add one `<script>` tag to any site, and watch devices, visits, time-on-page, IP/
 | IP + location | Via `ipwho.is` (fallback `ipify`) |
 | Ban system | Ban by device or by IP, with custom "Access blocked" message, applied live |
 | Login protection | 5 wrong passwords → login locked for 24 days. While locked, the Sign in button is hidden and the admin account **cannot** log in. Only a separate **unlock-only account** can lift the lock (see [Lock & unlock](#-lock--unlock-how-it-works)) |
-| Login attempt log | Every attempt with device, IP, location |
+| Login attempt log | One card per device. Tap a card to open a full detail page with profile, stats and the complete attempt timeline (time, result, IP, location, screen, language, user-agent) |
+| Login block (forever) | Block a device (by Device ID) or an IP from the login page permanently. Blocked visitors only see "Access blocked". Applied live, even to a device that is already signed in |
+| Failed-login alert | When you open the dashboard (or while you are on it), a popup lists new failed attempts since you last checked, with Block device / Block IP buttons and a vibration alert |
+| Rename login devices | Give friendly names to devices in the Attempts tab. The name is used everywhere, including the popup |
+| History protection | The attempt history of a blocked device or IP cannot be deleted (enforced in the app and in the Firestore rules) |
+| Swipe back | Swipe from the middle of the screen (left→right or right→left) and an Android-style round back button follows your finger. Release after the arrow turns accent-colored to go back |
 | Trash | Soft-delete devices/logs, restore, or delete forever |
 | PWA | Installable, offline shell via service worker |
 
@@ -149,6 +157,12 @@ What the rules do:
 | Wrong-password counter | Anyone can add +1 (needed before login); the 5th failure sets the lock |
 | Successful-login reset | Any signed-in user **except** the unlock account, only when not locked |
 | Unlock (reset to 0) | **Only** the unlock account, **only while locked** |
+| `attempts` create | Anyone can log an attempt (needed before login). Only the listed fields are accepted, including `did` (Device ID) |
+| `attempts` delete | Admin only, and **denied** if the attempt's Device ID or IP is in `loginBlocks` |
+| `loginBlocks` | Anyone can `get` a single document (needed to check before login). Only the admin can list, create, update or delete |
+| `loginAlias` | Admin only (read and write) |
+
+> After updating `firestore.rules`, copy the whole file into **Firestore → Rules** and press **Publish** again. Without the new `loginBlocks` / `loginAlias` rules, blocking and renaming will fail with `permission-denied`, and without `did` in the `attempts` rule, attempts will stop being logged.
 
 ### 6) Put your config into the code
 Replace the Firebase config in **both** files:
@@ -225,13 +239,34 @@ If nobody unlocks it, the lock ends by itself after `LOCK_DAYS`, and the next wr
 
 ---
 
+## ⛔ Login blocking (how it works)
+
+Every browser gets a random **Device ID** stored in `localStorage` (`_lg_did`) and sent with each login attempt.
+
+- **Block device forever** → creates `loginBlocks/d_<DeviceID>`.
+- **Block IP** → creates `loginBlocks/ip_<ip>` (dots and colons replaced by `_`).
+- Before showing the login form, the dashboard checks both documents. A blocked visitor sees **"Access blocked"** and no form.
+- If the login page is already open when you block it, it switches to "Access blocked" live (listener + a 4 second backup check).
+- If the blocked device is already signed in, it is signed out immediately and shown "Access blocked".
+- You cannot block your own Device ID or your own IP.
+- If another person shares your IP (same Wi-Fi), **Block IP** also blocks you. Use **Block device** in that case.
+
+> ⚠️ This is a client-side check. See [Security & limitations](#-security--limitations-please-read).
+
+---
+
 ## 🧭 Using the dashboard
 
 - **Websites** → pick a site → list of devices → tap a device for full logs.
 - **Rename** a device to a friendly alias.
 - **Ban device / Ban IP** → the visitor instantly sees an "Access blocked" page with your message. **Unban** from the device page or the **Banned** tab.
 - **Trash** → soft-delete; restore or delete forever (banned devices can't be deleted).
-- **Attempts** → every login attempt (success, wrong password, locked, unlocked).
+- **Attempts** → one card per login device. Tap a card to open its detail page: profile, IP, location, screen, language, total/success/failed counts, first and last attempt, and the full attempt timeline.
+  - **Rename** the device.
+  - **Block device forever** / **Block IP** → the visitor can never see the login form again. **Unblock** from the same page.
+  - **Clear history** → deletes the device's attempts. Not available (shows "History protected") while the device or its IP is blocked.
+- **Failed-login popup** → when failed attempts from other devices arrive, a popup appears (with vibration if supported). Tap **OK** to mark them as seen, or block directly from the popup.
+- **Swipe back** → on a phone, swipe horizontally from anywhere except the 28 px screen edges. A round back button appears. Release past the threshold to go back one level (device → list, site → sites, other tab → Websites). Open modals are closed first.
 - **Session** auto-expires after inactivity (`SESSION_MIN` in `index.html`, default 2 min).
 - **Lock / unlock** → see [Lock & unlock](#-lock--unlock-how-it-works).
 
@@ -246,6 +281,11 @@ If nobody unlocks it, the lock ends by itself after `LOCK_DAYS`, and the next wr
 | Session timeout | `SESSION_MIN` in `index.html` |
 | Max failed logins / lock days | `MAXF`, `LOCK_DAYS` in `index.html` **and** the numbers `5` / `24` in `firestore.rules` (keep them identical) |
 | "Online" threshold | `ONLINE_MS` in `index.html` |
+| Swipe-back distance | `BK_DIST` (px needed to arm the back button) and the `28` edge margin in `index.html` |
+| Swipe-back button smoothness | The `0.22` / `0.28` easing factors in `bkTick()` in `index.html` |
+| Login-page block re-check interval | `blkTimer` (default `4000` ms) in `watchBlock()` in `index.html` |
+| Device ID storage key | `_lg_did` (localStorage) |
+| Last-seen alert marker | `_lg_ack` (localStorage) |
 | Default block message | `DEFAULT_MSG` in `tracker.js` |
 | Time-on-page flush interval | `setInterval(flush, 30000)` in `tracker.js` |
 | Service worker cache version | `V` in `sw.js` |
@@ -254,6 +294,7 @@ If nobody unlocks it, the lock ends by itself after `LOCK_DAYS`, and the next wr
 
 ## 💸 Firebase free-tier note
 The Spark plan allows roughly 50k reads / 20k writes per day. `tracker.js` writes on each visit and about every 30 s while the page is open, and the dashboard uses live listeners. Busy sites may exceed the free quota — monitor usage in the Firebase console.
+While the login page is open, the block check also reads 2 small documents every 4 seconds (it stops after you sign in).
 
 ---
 
@@ -264,6 +305,8 @@ The Spark plan allows roughly 50k reads / 20k writes per day. `tracker.js` write
 - Failed-login counting is stored in Firestore and is **publicly writable by design** (needed so the lock works before login). Someone could deliberately trigger the lock by entering 5 wrong passwords. That is harmless for you: you simply unlock with the unlock account (see [Lock & unlock](#-lock--unlock-how-it-works)). Nobody else can unlock it, because the `unlocker()` rule trusts only that one UID.
 - Bans are enforced **client-side** by `tracker.js`. A visitor who blocks scripts or the tracker is not blocked. This is *not* a firewall.
 - Device IDs live in the visitor's `localStorage`; clearing it creates a "new" device.
+- **Login blocks are client-side.** They stop normal visitors and auto-retries, but not someone who disables JavaScript or calls the Firebase Auth API directly. A blocked device can also get around a **device block** by clearing site data or using incognito, and around an **IP block** by changing network. The real protection is a strong admin password and a secret admin email. For hard blocking you need server-side logic (Cloud Functions).
+- Blocked devices' attempt history is protected from deletion by the rules, but any admin can still unblock first and then delete.
 - Anyone can create device/log documents (that's how tracking works), so data can be spammed. Treat statistics as indicative, not exact.
 - Firebase Auth also has its own brute-force protection. After many bad attempts it may answer "Too many attempts. Try later." Wait a while and retry.
 
@@ -294,6 +337,12 @@ IP/location lookup uses third-party services (`ipwho.is`, `api.ipify.org`) — t
 | Install button doesn't work | Needs HTTPS, valid `manifest.webmanifest`, icons and `sw.js`. Open in Chrome/Safari (not in-app browsers). The Install dialog shows a checklist |
 | Icons not showing | Check the `icons/` folder name and the paths in `index.html`, `manifest.webmanifest` and `sw.js` |
 | IP/location missing | Ad-blockers may block `ipwho.is`; the tracker then continues without it |
+| Attempts are no longer logged after updating | The `attempts` rule must allow the `did` field in `hasOnly([...])`. Re-publish the rules |
+| Block / Rename says `permission-denied` | `loginBlocks` / `loginAlias` rules not published |
+| Site shows only "Loading..." / blank | A JavaScript error stopped the script. Open the console. `Identifier '...' has already been declared` means a function or `const` was pasted twice |
+| Old attempts have no Block device button | They were logged before Device ID existed. Use **Block IP** instead |
+| Swipe back does nothing | You started the swipe on the screen edge, on an input or on the tab bar, or you are already on the first screen (Websites list) |
+| Blocking my own phone fails | You can't block your own Device ID or IP. Test from another device or browser |
 
 ---
 
