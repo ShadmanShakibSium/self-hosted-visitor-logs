@@ -47,11 +47,12 @@ service cloud.firestore {
     }
 
     match /attempts/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['ts','result','ua','device','lang','screen','ip','city','country'])
+      allow create: if request.resource.data.keys().hasOnly(['ts','did','result','ua','device','lang','screen','ip','city','country'])
                     && request.resource.data.ts == request.time
                     && request.resource.data.result in ['success','wrong','locked','unlocked']
                     && request.resource.data.ua.size() <= 300
                     && request.resource.data.device.size() <= 100
+                    && request.resource.data.get('did', '').size() <= 64
                     && request.resource.data.get('lang', '').size() <= 20
                     && request.resource.data.get('screen', '').size() <= 20
                     && request.resource.data.get('ip', '').size() <= 64
@@ -62,6 +63,11 @@ service cloud.firestore {
     }
 
     match /bans/{id} {
+      allow get: if true;
+      allow list, create, update, delete: if admin();
+    }
+
+    match /loginBlocks/{id} {
       allow get: if true;
       allow list, create, update, delete: if admin();
     }
