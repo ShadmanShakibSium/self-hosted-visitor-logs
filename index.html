@@ -802,7 +802,7 @@
     }
     const WHO = who();
     async function logAttempt(result) {
-      try { const w = await WHO; await addDoc(collection(db, "attempts"), { ...w, result, ts: serverTimestamp() }) } catch (e) { console.error(e) }
+      try { const w = await WHO; await addDoc(collection(db, "attempts"), { ...w, did: DID, result, ts: serverTimestamp() }) } catch (e) { console.error(e) }
     }
 
     /* ---------- login / lock ---------- */
@@ -817,6 +817,8 @@
     const isLocked = s => { const la = T(s.lockedAt); return s.count >= MAXF && !!la && la.getTime() + LOCK_DAYS * 864e5 > Date.now() };
 
     async function loginView(msg = "") {
+      if (await isBlockedHere()) { showBlocked(); return }
+      watchBlock();
       let s = null; try { s = await getState() } catch (e) { }
       const locked = !!s && isLocked(s);
       const note = locked ? "Locked for " + LOCK_DAYS + " days · Opens on " + fd(new Date(T(s.lockedAt).getTime() + LOCK_DAYS * 864e5)) : msg;
@@ -838,6 +840,7 @@
         busy = true;
         try {
           const cur = await getState();
+          if (await isBlockedHere()) { busy = false; loginView(); return }
           if (!isLocked(cur)) { busy = false; loginView(); return }
           await signInWithEmailAndPassword(auth, em, pw);
           try { await updateDoc(SREF(), { count: 0, last: "fail", at: serverTimestamp(), okAt: cur.okAt, lockedAt: cur.lockedAt }) }
@@ -857,6 +860,7 @@
         busy = true;
         try {
           const s = await getState();
+          if (await isBlockedHere()) { busy = false; loginView(); return }
           if (isLocked(s)) { busy = false; loginView(); return }
           let bad = null;
           try {
@@ -876,7 +880,7 @@
           }
           await updateDoc(SREF(), { count: 0, last: "ok", at: serverTimestamp(), okAt: serverTimestamp(), lockedAt: s.lockedAt });
           logAttempt("success");
-          MODE = "auth"; PW = ""; PASS = 1000; start();
+          stopBlkWatch(); MODE = "auth"; PW = ""; PASS = 1000; start();
         } catch (e) { console.error(e); loginView("Error: " + (e.code || e.message)) }
         busy = false;
       };
@@ -891,14 +895,210 @@
       e0.onkeydown = e => { if (e.key === "Enter") p.focus() };
     }
 
-    function lockOut(msg) { unsubs.forEach(f => f()); unsubs = []; if (unLogs) { unLogs(); unLogs = null } PW = ""; PASS = 0; MODE = ""; devices = []; bans = {}; attempts = []; logs = []; open = null; tab = ""; curSite = ""; tSite = ""; clearSess(); signOut(auth).catch(() => { }); loginView(msg) }
+
+    /* ---------- device id / login block / grouped attempts / alerts ---------- */
+    const DID = (() => { try { let v = localStorage.getItem("_lg_did"); if (!v) { v = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12); localStorage.setItem("_lg_did", v) } return v } catch (e) { return "" } })();
+    let lblocks = {}, attOpen = "", alertSig = "", laliases = {};
+    const gName = x => (x.did && laliases["d_" + x.did]?.name) || x.device || "Unknown device";
+    const ACK = "_lg_ack";
+    const isOk = x => x.result === "success" || x.result === "unlocked";
+    const gKey = x => x.did ? "d_" + x.did : "u_" + (x.ip || "") + "|" + (x.device || "");
+    const tsOf = x => T(x.ts)?.getTime() || 0;
+    const maxAttTs = () => attempts.reduce((a, x) => Math.max(a, tsOf(x)), 0);
+    const setAck = v => { try { localStorage.setItem(ACK, String(v)) } catch (e) { } };
+
+    async function isBlockedHere() {
+      const hit = async id => { try { return (await getDoc(doc(db, "loginBlocks", id))).exists() } catch (e) { return false } };
+      if (DID && await hit("d_" + DID)) return true;
+      try {
+        const ip = await Promise.race([WHO.then(w => w.ip), new Promise(r => setTimeout(r, 2500))]);
+        if (ip && await hit(ipKey(ip))) return true;
+      } catch (e) { }
+      return false;
+    }
+
+    function groupAtt(list = attempts) {
+      const m = new Map();
+      for (const x of list) {
+        const k = gKey(x);
+        let g = m.get(k);
+        if (!g) { g = { key: k, did: x.did || "", x, list: [], wrong: 0, ok: 0 }; m.set(k, g) }
+        g.list.push(x);
+        if (isOk(x)) g.ok++; else g.wrong++;
+      }
+      return [...m.values()];
+    }
+
+    async function blockDev(x) {
+      if (!x.did) { alert("This old log has no device ID. Block the IP instead."); return }
+      if (x.did === DID) { alert("This is your own device."); return }
+      if (!confirm("Block this device from logging in forever?")) return;
+      await W(b => b.set(doc(db, "loginBlocks", "d_" + x.did), { type: "device", did: x.did, label: x.device || "", ip: x.ip || "", at: serverTimestamp() }));
+    }
+    async function blockIp(x) {
+      if (!x.ip) return;
+      const me = await WHO;
+      if (me.ip && me.ip === x.ip) { alert("This is your own IP."); return }
+      if (!confirm("Block IP " + x.ip + " from logging in forever?")) return;
+      await W(b => b.set(doc(db, "loginBlocks", ipKey(x.ip)), { type: "ip", ip: x.ip, label: x.device || "", at: serverTimestamp() }));
+    }
+
+    const isProt = g => !!(g.did && lblocks["d_" + g.did]) || g.list.some(l => l.ip && lblocks[ipKey(l.ip)]);
+    const ATT_LAB = { success: "Success", unlocked: "Unlocked", wrong: "Wrong password", locked: "Locked" };
+
+    function attView() {
+      if (!attempts.length) return `<div class="empty">${ic("shield-halved")}No login attempts yet</div>`;
+      const gs = groupAtt();
+      if (attOpen) {
+        const g = gs.find(z => z.key === attOpen);
+        if (g) return attDetail(g);
+        attOpen = "";
+      }
+      return gs.map(g => {
+        const x = g.x, bd = g.did && lblocks["d_" + g.did], bi = x.ip && lblocks[ipKey(x.ip)];
+        return `<div class="card dev" data-a="aopen" data-v="${esc(g.key)}">
+  <div class="av ${g.wrong ? "bad" : ""}">${ic(dIcon(x))}</div>
+  <div class="info">
+    <div class="top"><b>${esc(gName(x))}</b>${bd ? `<span class="badge">${ic("ban")}BLOCKED</span>` : ""}${bi ? `<span class="badge">${ic("network-wired")}IP BLOCKED</span>` : ""}</div>
+    <div class="meta"><span>${ic("network-wired")}${esc(x.ip || "—")}</span><span>${ic("location-dot")}${esc(loc(x))}</span></div>
+    <div class="meta"><span>${ic("clock-rotate-left")}${fd(x.ts)}</span></div>
+    <div class="chips"><span class="chip">${ic("right-to-bracket")}${g.list.length} tries</span>${g.ok ? `<span class="badge ok">${g.ok} success</span>` : ""}${g.wrong ? `<span class="badge">${g.wrong} failed</span>` : ""}</div>
+  </div>${ic("chevron-right chev")}</div>`;
+      }).join("");
+    }
+
+    function attDetail(g) {
+      const x = g.x, bd = g.did && lblocks["d_" + g.did], bi = x.ip && lblocks[ipKey(x.ip)];
+      const prot = isProt(g), named = g.did && laliases["d_" + g.did]?.name;
+      const last = g.list[0], first = g.list[g.list.length - 1];
+      const cell = (i, l, v) => `<div><span class="mu">${ic(i)}${l}</span><b>${v}</b></div>`;
+      return `<button class="btn back" data-a="attback">${ic("arrow-left")}Back</button>
+  <div class="card"><div class="prof"><div class="av ${g.wrong ? "bad" : ""}">${ic(dIcon(x))}</div>
+  <div class="info"><div class="top"><b style="white-space:normal">${esc(gName(x))}</b>${bd ? `<span class="badge">${ic("ban")}BLOCKED</span>` : ""}${bi ? `<span class="badge">${ic("network-wired")}IP BLOCKED</span>` : ""}</div>
+  ${named ? `<div class="mu">${ic("tag")} ${esc(x.device || "")}</div>` : ""}<div class="mu" style="word-break:break-all">${esc(x.ua || "")}</div></div></div>
+  <div class="grid">
+  ${cell("network-wired", "IP", esc(x.ip || "—"))}${cell("location-dot", "Location", esc(loc(x)))}${cell("expand", "Screen", esc(x.screen || "—"))}
+  ${cell("language", "Language", esc(x.lang || "—"))}${cell("right-to-bracket", "Total tries", g.list.length)}${cell("circle-check", "Success", g.ok)}
+  ${cell("circle-xmark", "Failed", g.wrong)}${cell("calendar-plus", "First attempt", fd(first.ts))}${cell("clock-rotate-left", "Last attempt", fd(last.ts))}</div>
+  <div class="acts">
+  ${g.did ? `<button class="btn" data-a="arename" data-v="${esc(g.key)}">${ic("pen")}Rename</button>` : ""}
+  ${bd ? `<button class="btn grn" data-a="aunblock" data-id="d_${esc(g.did)}">${ic("unlock")}Unblock device</button>` : (g.did ? `<button class="btn red" data-a="ablock" data-v="${esc(g.key)}">${ic("ban")}Block device forever</button>` : "")}
+  ${x.ip ? (bi ? `<button class="btn grn" data-a="aunblock" data-id="${esc(ipKey(x.ip))}">${ic("unlock")}Unblock IP</button>` : `<button class="btn red" data-a="ablockip" data-v="${esc(g.key)}">${ic("network-wired")}Block IP</button>`) : ""}
+  ${prot ? `<span class="badge nw">${ic("lock")}History protected</span>` : `<button class="btn" data-a="aclear" data-v="${esc(g.key)}">${ic("trash-can")}Clear history</button>`}
+  </div></div>
+  <h3 class="sec">${ic("timeline")}All attempts <span class="chip">${g.list.length}</span></h3>
+  <div class="tl">` + g.list.map(l => `<div class="card log"><div class="row"><b>${fd(l.ts)}</b><span class="badge ${isOk(l) ? "ok" : ""}">${esc(ATT_LAB[l.result] || l.result)}</span></div>
+  <div class="meta" style="margin-top:4px"><span>${ic("network-wired")}${esc(l.ip || "—")}</span><span>${ic("location-dot")}${esc(loc(l))}</span></div>
+  <div class="meta"><span>${ic("expand")}${esc(l.screen || "—")}</span><span>${ic("language")}${esc(l.lang || "—")}</span></div>
+  <div class="mu pg" style="font-size:11.5px">${esc(l.ua || "")}</div></div>`).join("") + `</div>`;
+    }
+
+    $.addEventListener("click", async e => {
+      const el = e.target.closest("[data-a]"); if (!el) return;
+      const a = el.dataset.a, v = el.dataset.v, id = el.dataset.id;
+      if (!["aopen", "ablock", "ablockip", "aunblock", "aclear", "arename", "attback"].includes(a)) return;
+      const g = v ? groupAtt().find(z => z.key === v) : null;
+      if (a === "attback") { attOpen = ""; render(); scrollTo(0, 0) }
+      else if (a === "aopen") { attOpen = v; render(); scrollTo(0, 0) }
+      else if (a === "ablock" && g) blockDev(g.x);
+      else if (a === "ablockip" && g) blockIp(g.x);
+      else if (a === "aunblock") await W(b => b.delete(doc(db, "loginBlocks", id)));
+      else if (a === "arename" && g && g.did) {
+        const cur = laliases["d_" + g.did]?.name || g.x.device || "";
+        const nv = await askName(cur); if (nv === null) return;
+        const t = nv.trim();
+        await W(b => t ? b.set(doc(db, "loginAlias", "d_" + g.did), { name: t.slice(0, 40), at: serverTimestamp() }) : b.delete(doc(db, "loginAlias", "d_" + g.did)));
+      }
+      else if (a === "aclear" && g) {
+        if (isProt(g)) { alert("This device or IP is blocked. Its history can't be deleted."); return }
+        if (!confirm("Delete all attempts of this device?")) return;
+        for (let i = 0; i < g.list.length; i += 400) { const c = g.list.slice(i, i + 400); await W(b => c.forEach(x => b.delete(doc(db, "attempts", x.id)))) }
+        attOpen = ""; render();
+      }
+    });
+
+    function checkAlerts() {
+      if (!MODE) return;
+      let raw = null; try { raw = localStorage.getItem(ACK) } catch (e) { }
+      const mx = maxAttTs();
+      if (raw === null) { setAck(mx); return }          // প্রথমবার: পুরনো এটেম্প্ট নিয়ে পপআপ দেবে না
+      const ack = Number(raw) || 0;
+      const fresh = attempts.filter(x => !isOk(x) && x.did !== DID && tsOf(x) > ack);
+      if (!fresh.length) { if (mx > ack) setAck(mx); return }
+      showAlert(fresh);
+    }
+
+    function showAlert(fresh) {
+      const gs = groupAtt(fresh);
+      const sig = fresh.map(x => x.id).join(",") + "|" + Object.keys(lblocks).join(",");
+      if (sig === alertSig && document.getElementById("alertM")) return;
+      const isNewAlert = !document.getElementById("alertM");
+      alertSig = sig;
+      document.getElementById("alertM")?.remove();
+      const m = document.createElement("div"); m.className = "modal"; m.id = "alertM";
+      m.innerHTML = `<div class="mbox" style="max-width:420px;max-height:85vh;overflow:auto">
+  <h3 style="color:var(--rd)">${ic("triangle-exclamation")} Failed login attempts</h3>
+  <div class="mu" style="margin:6px 0 12px">${fresh.length} failed attempt${fresh.length > 1 ? "s" : ""} since you last checked</div>
+  ${gs.map((g, i) => {
+        const x = g.x, bd = g.did && lblocks["d_" + g.did], bi = x.ip && lblocks[ipKey(x.ip)];
+        return `<div class="card" style="box-shadow:none;background:var(--bg)">
+    <div class="top"><b>${esc(gName(x))}</b><span class="badge">${g.wrong} failed</span></div>
+    <div class="meta"><span>${ic("network-wired")}${esc(x.ip || "—")}</span><span>${ic("location-dot")}${esc(loc(x))}</span></div>
+    <div class="meta"><span>${ic("clock-rotate-left")}${fd(x.ts)}</span></div>
+    <div class="acts">
+      ${bd ? `<span class="badge">${ic("ban")}Device blocked</span>` : (g.did ? `<button class="btn sm red" data-b="d" data-i="${i}">${ic("ban")}Block device</button>` : "")}
+      ${bi ? `<span class="badge">${ic("ban")}IP blocked</span>` : (x.ip ? `<button class="btn sm red" data-b="i" data-i="${i}">${ic("network-wired")}Block IP</button>` : "")}
+    </div></div>`;
+      }).join("")}
+  <div class="acts" style="justify-content:flex-end"><button class="btn pri" id="alOk">OK</button></div></div>`;
+      document.body.appendChild(m);
+      m.querySelectorAll("[data-b]").forEach(btn => btn.onclick = () => { const g = gs[+btn.dataset.i]; btn.dataset.b === "d" ? blockDev(g.x) : blockIp(g.x) });
+      m.querySelector("#alOk").onclick = () => { setAck(Math.max(maxAttTs(), ...fresh.map(tsOf))); alertSig = ""; m.remove(); render() };
+      if (isNewAlert) { try { navigator.vibrate && navigator.vibrate([120, 80, 120]) } catch (e) { } }
+    }
+
+
+    /* ---------- live block watch (login page) ---------- */
+    let blkUnsubs = [], blkTimer = null;
+    const stopBlkWatch = () => { blkUnsubs.forEach(f => f()); blkUnsubs = []; clearInterval(blkTimer); blkTimer = null };
+    function showBlocked() {
+      stopBlkWatch();
+      document.querySelectorAll(".modal").forEach(m => m.remove());
+      $.innerHTML = `<div class="login"><div class="lcard"><div class="lic" style="background:var(--rds);color:var(--rd)">${ic("ban")}</div><h2>Access blocked</h2><div class="mu">This device is blocked permanently.</div></div></div>`;
+    }
+    async function watchBlock() {
+      stopBlkWatch();
+      const watch = id => {
+        try { blkUnsubs.push(onSnapshot(doc(db, "loginBlocks", id), s => { if (s.exists() && !MODE) showBlocked() }, err => console.error("block watch:", id, err.code))) } catch (e) { console.error(e) }
+      };
+      if (DID) watch("d_" + DID);
+      try {
+        const ip = await Promise.race([WHO.then(w => w.ip), new Promise(r => setTimeout(r, 2500))]);
+        if (ip) watch(ipKey(ip));
+      } catch (e) { }
+
+      blkTimer = setInterval(async () => {
+        if (MODE) { stopBlkWatch(); return }
+        if (await isBlockedHere()) showBlocked();
+      }, 4000);
+    }
+
+
+    function lockOut(msg) { document.querySelectorAll(".modal").forEach(m => m.remove()); alertSig = ""; lblocks = {}; laliases = {}; attOpen = ""; unsubs.forEach(f => f()); unsubs = []; if (unLogs) { unLogs(); unLogs = null } PW = ""; PASS = 0; MODE = ""; devices = []; bans = {}; attempts = []; logs = []; open = null; tab = ""; curSite = ""; tSite = ""; clearSess(); signOut(auth).catch(() => { }); loginView(msg) }
     function lock(err) { console.error(err); lockOut("Session expired. Please sign in again.") }
 
     function start() {
       unsubs.forEach(f => f()); unsubs = []; let saved = false;
       unsubs.push(onSnapshot(query(collection(db, "devices"), orderBy("lastSeen", "desc"), limit(PASS)), s => { devices = s.docs.map(d => ({ id: d.id, ...d.data() })); if (!saved) { saved = true; lastTouch = Date.now(); saveSess() } render() }, lock));
       unsubs.push(onSnapshot(query(collection(db, "bans"), limit(PASS)), s => { bans = {}; s.docs.forEach(d => bans[d.id] = { id: d.id, ...d.data() }); render() }, lock));
-      unsubs.push(onSnapshot(query(collection(db, "attempts"), orderBy("ts", "desc"), limit(PASS)), s => { attempts = s.docs.map(d => ({ id: d.id, ...d.data() })); render() }, lock));
+      unsubs.push(onSnapshot(query(collection(db, "loginBlocks"), limit(PASS)), s => {
+        lblocks = {}; s.docs.forEach(d => lblocks[d.id] = { id: d.id, ...d.data() });
+        if (DID && lblocks["d_" + DID]) { lockOut(""); return }
+        WHO.then(w => { if (MODE && w.ip && lblocks[ipKey(w.ip)]) lockOut("") }).catch(() => { });
+        render();
+      }, err => console.error(err)));
+      unsubs.push(onSnapshot(query(collection(db, "loginAlias"), limit(PASS)), s => { laliases = {}; s.docs.forEach(d => laliases[d.id] = { id: d.id, ...d.data() }); render() }, err => console.error(err)));
+      unsubs.push(onSnapshot(query(collection(db, "attempts"), orderBy("ts", "desc"), limit(PASS)), s => { attempts = s.docs.map(d => ({ id: d.id, ...d.data() })); checkAlerts(); render() }, lock));
     }
 
     function render() {
@@ -944,7 +1144,7 @@
   <div style="display:flex;gap:12px;align-items:center"><span class="live">Live</span>${standalone() ? "" : `<button class="btn sm" data-a="install">${ic("download")}Install</button>`}<button class="btn sm" data-a="out">${ic("right-from-bracket")}Logout</button></div></div></header>
   <div class="tabs">
   <button class="tab ${on("__sites")}" data-a="tab" data-v="__sites">${ic("globe")}Websites<span class="n">${sites.length}</span></button>
-  <button class="tab ${on("__att")}" data-a="tab" data-v="__att">${ic("right-to-bracket")}Attempts<span class="n">${attempts.length}</span></button>
+  <button class="tab ${on("__att")}" data-a="tab" data-v="__att">${ic("right-to-bracket")}Attempts<span class="n">${groupAtt().length}</span></button>
   <button class="tab ${on("__bans")}" data-a="tab" data-v="__bans">${ic("ban")}Banned<span class="n">${Object.keys(bans).length}</span></button>
   <button class="tab ${on("__trash")}" data-a="tab" data-v="__trash">${ic("trash-can")}Trash<span class="n">${trash.length}</span></button></div>
   <main>${body}</main>`;
@@ -988,20 +1188,6 @@
   <div class="acts" style="margin-top:8px">${l.trashed ? `<button class="btn sm grn" data-a="lrestore" data-lid="${esc(l.id)}">${ic("rotate-left")}Restore</button><button class="btn sm red" data-a="lpurge" data-lid="${esc(l.id)}">${ic("xmark")}Delete forever</button>` : `<button class="btn sm" data-a="ltrash" data-lid="${esc(l.id)}">${ic("trash-can")}Trash</button>`}</div></div>`).join("") + `</div>` : `<div class="empty">${ic("inbox")}No logs</div>`}`;
     }
 
-    function attView() {
-      if (!attempts.length) return `<div class="empty">${ic("shield-halved")}No login attempts yet</div>`;
-      const lab = { success: "Success", unlocked: "Unlocked", wrong: "Wrong password", locked: "Locked" };
-      return attempts.map(x => {
-        const good = x.result === "success" || x.result === "unlocked";
-        return `<div class="card dev" style="cursor:default"><div class="av ${good ? "" : "bad"}">${ic(dIcon(x))}</div>
-    <div class="info"><div class="top"><b>${esc(x.device || "Unknown device")}</b><span class="badge ${good ? "ok" : ""}">${esc(lab[x.result] || x.result)}</span></div>
-    <div class="meta"><span>${ic("network-wired")}${esc(x.ip || "—")}</span><span>${ic("location-dot")}${esc(loc(x))}</span></div>
-    <div class="meta"><span>${ic("clock-rotate-left")}${fd(x.ts)}</span><span>${ic("expand")}${esc(x.screen || "—")}</span><span>${ic("language")}${esc(x.lang || "—")}</span></div>
-    <div class="mu" style="font-size:12px;word-break:break-all;margin-top:4px">${esc(x.ua || "")}</div></div>
-    <button class="btn sm red" data-a="adel" data-id="${esc(x.id)}">${ic("trash-can")}</button></div>`
-      }).join("");
-    }
-
     function bansView() {
       const all = Object.keys(bans).map(id => ({ ...bans[id], id }));
       const dv = all.filter(x => x.type !== "ip"), ips = all.filter(x => x.type === "ip");
@@ -1032,7 +1218,7 @@
       if (a !== "open") e.stopPropagation();
       const lref = () => doc(db, "devices", open, "logs", lid);
       if (a === "bsub") { bsub = el.dataset.v; render() }
-      else if (a === "tab") { tab = el.dataset.v; open = null; curSite = ""; tSite = ""; if (unLogs) { unLogs(); unLogs = null } render() }
+      else if (a === "tab") { tab = el.dataset.v; open = null; curSite = ""; tSite = ""; attOpen = ""; if (unLogs) { unLogs(); unLogs = null } render() }
       else if (a === "tsite") { tSite = el.dataset.v; render(); scrollTo(0, 0) }
       else if (a === "tback") { tSite = ""; render() }
       else if (a === "site") { curSite = el.dataset.v; render(); scrollTo(0, 0) }
@@ -1064,6 +1250,113 @@
       else if (a === "lrestore") await W(b => b.update(lref(), { trashed: false }));
       else if (a === "lpurge") { if (confirm("This will be deleted permanently. Are you sure?")) await W(b => b.delete(lref())) }
     });
+
+
+    /* ---------- android style back gesture ---------- */
+    const bkCss = document.createElement("style");
+    bkCss.textContent = `
+.bk{position:fixed;top:0;left:0;z-index:40;width:46px;height:46px;border-radius:50%;
+background:#2b2d3a;color:#fff;display:grid;place-items:center;font-size:17px;
+box-shadow:0 4px 16px rgba(0,0,0,.35);pointer-events:none;opacity:0;transition:background .15s;
+transform:translate(-60px,-100px);will-change:transform,opacity}
+.bk.r{left:auto;right:0}
+.bk.snap{transition:transform .2s cubic-bezier(.2,.8,.2,1),opacity .2s,background .15s}
+.bk.rdy{background:var(--ac)}
+@media(prefers-color-scheme:dark){.bk{background:#3a3f55}.bk.rdy{background:var(--ac)}}`;
+    document.head.appendChild(bkCss);
+
+    const bk = document.createElement("div");
+    bk.className = "bk";
+    bk.innerHTML = `<i class="fa-solid fa-arrow-left"></i>`;
+    document.body.appendChild(bk);
+
+    const canBack = () => !!MODE && !document.querySelector(".modal") &&
+      !!(open || (tab === "__trash" && tSite) || (tab === "__sites" && curSite) || (tab === "__att" && attOpen) || tab !== "__sites");
+
+    function goBack() {
+      const m = document.querySelector(".modal");
+      if (m) { m.querySelector("#rc,#bc,#ok")?.click(); return true }
+      if (!MODE) return false;
+      if (open) { open = null; if (unLogs) { unLogs(); unLogs = null } render(); scrollTo(0, 0); return true }
+      if (tab === "__trash" && tSite) { tSite = ""; render(); return true }
+      if (tab === "__sites" && curSite) { curSite = ""; render(); return true }
+      if (tab === "__att" && attOpen) { attOpen = ""; render(); scrollTo(0, 0); return true }
+      if (tab !== "__sites") { tab = "__sites"; curSite = ""; tSite = ""; render(); return true }
+      return false;
+    }
+
+    const BK_DIST = 100;
+    const BK_SIZE = 46;
+    let sx = 0, sy = 0, st = 0, sOk = false, smode = 0, sdx = 0, rdy = false;
+
+    let bkP = 0, bkTP = 0, bkY = 0, bkTY = 0, bkRaf = 0, bkFirst = true;
+
+    function bkTick() {
+      bkP += (bkTP - bkP) * 0.22;
+      bkY += (bkTY - bkY) * 0.28;
+      const right = bk.classList.contains("r");
+      const off = -BK_SIZE - 4 + bkP * (BK_SIZE + 4 + 14);
+      bk.style.opacity = Math.min(bkP * 1.3, 1);
+      bk.style.transform = `translate(${right ? -off : off}px,${bkY}px) scale(${0.7 + 0.3 * Math.min(bkP, 1)})`;
+      if (Math.abs(bkTP - bkP) > 0.002 || Math.abs(bkTY - bkY) > 0.5) bkRaf = requestAnimationFrame(bkTick);
+      else bkRaf = 0;
+    }
+
+    function showBk(dx, y) {
+      const right = dx < 0, a = Math.abs(dx);
+      bkTP = Math.min(a / BK_DIST, 1.1);
+      bkTY = Math.max(30, Math.min(y - BK_SIZE / 2, innerHeight - BK_SIZE - 30));
+      bk.classList.remove("snap");
+      bk.classList.toggle("r", right);
+      bk.firstChild.className = "fa-solid fa-arrow-" + (right ? "right" : "left");
+      if (bkFirst) { bkFirst = false; bkP = 0; bkY = bkTY }
+      if (!bkRaf) bkRaf = requestAnimationFrame(bkTick);
+      const now = a >= BK_DIST;
+      if (now !== rdy) { rdy = now; bk.classList.toggle("rdy", now); if (now) try { navigator.vibrate && navigator.vibrate(12) } catch (e) { } }
+    }
+
+    function hideBk(pulse) {
+      cancelAnimationFrame(bkRaf); bkRaf = 0;
+      const right = bk.classList.contains("r");
+      bk.classList.add("snap");
+      bk.style.opacity = 0;
+      bk.style.transform = `translate(${right ? 60 : -60}px,${bkY}px) scale(${pulse ? 1.15 : .7})`;
+      rdy = false;
+      setTimeout(() => bk.classList.remove("rdy"), 200);
+    }
+
+    addEventListener("touchstart", e => {
+      const t = e.touches[0];
+      sOk = e.touches.length === 1 && t.clientX > 28 && t.clientX < innerWidth - 28 &&
+        !e.target.closest("input,textarea,.tabs") && canBack();
+      sx = t.clientX; sy = t.clientY; st = Date.now(); smode = 0; sdx = 0; rdy = false;
+    }, { passive: true });
+
+    addEventListener("touchmove", e => {
+      if (!sOk) return;
+      const t = e.touches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      if (smode === 0 && (Math.abs(dx) > 10 || Math.abs(dy) > 10))
+        smode = Math.abs(dx) > Math.abs(dy) * 1.5 ? 1 : 2;
+      if (smode !== 1) return;
+      sdx = dx;
+      showBk(dx, t.clientY);
+    }, { passive: true });
+
+    addEventListener("touchcancel", () => {
+      if (smode === 1) hideBk(false);
+      sOk = false; smode = 0;
+    }, { passive: true });
+
+    addEventListener("touchend", () => {
+      if (!sOk || smode !== 1) { sOk = false; smode = 0; return }
+      const dist = Math.abs(sdx), vel = dist / Math.max(Date.now() - st, 1);
+      const commit = dist >= BK_DIST || (vel > 0.6 && dist > 50);
+      sOk = false; smode = 0;
+      if (!commit) { hideBk(false); return }
+      hideBk(true);
+      goBack();
+    }, { passive: true });
+
 
     setInterval(() => { if (MODE && !document.querySelector(".modal")) render() }, 15000);
     if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { }));
