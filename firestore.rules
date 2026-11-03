@@ -58,7 +58,10 @@ service cloud.firestore {
                     && request.resource.data.get('ip', '').size() <= 64
                     && request.resource.data.get('city', '').size() <= 60
                     && request.resource.data.get('country', '').size() <= 60;
-      allow list, delete: if admin();
+      allow list: if admin();
+      allow delete: if admin()
+                    && !exists(/databases/$(db)/documents/loginBlocks/$('d_' + resource.data.get('did', '')))
+                    && !exists(/databases/$(db)/documents/loginBlocks/$('ip_' + resource.data.get('ip', '').replace('[.:]', '_')));
       allow update: if false;
     }
 
@@ -70,6 +73,10 @@ service cloud.firestore {
     match /loginBlocks/{id} {
       allow get: if true;
       allow list, create, update, delete: if admin();
+    }
+
+    match /loginAlias/{id} {
+      allow read, write: if admin();
     }
 
     match /devices/{id} {
