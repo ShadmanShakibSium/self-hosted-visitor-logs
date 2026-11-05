@@ -650,6 +650,101 @@
         padding: 0 6px
       }
     }
+
+    .sortbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px
+    }
+
+    .sortwrap {
+      position: relative
+    }
+
+    .sortbtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--bd);
+      background: var(--card);
+      color: var(--tx);
+      font: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: var(--sh)
+    }
+
+    .sortbtn:hover,
+    .sortbtn.open {
+      border-color: var(--ac)
+    }
+
+    .sortbtn .a {
+      color: var(--ac);
+      font-size: 12px
+    }
+
+    .sortbtn .c {
+      color: var(--mu);
+      font-size: 11px;
+      transition: transform .15s
+    }
+
+    .sortbtn.open .c {
+      transform: rotate(180deg)
+    }
+
+    .sortmenu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 20;
+      min-width: 170px;
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 14px;
+      padding: 6px;
+      box-shadow: 0 10px 30px rgba(20, 24, 50, .18);
+      display: none
+    }
+
+    .sortmenu.open {
+      display: block
+    }
+
+    .sortopt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--tx);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 10px;
+      border-radius: 9px;
+      cursor: pointer;
+      text-align: left
+    }
+
+    .sortopt:hover {
+      background: var(--bg)
+    }
+
+    .sortopt.on {
+      background: var(--acs);
+      color: var(--ac)
+    }
+
+    .sortopt .ck {
+      margin-left: auto;
+      font-size: 12px
+    }
   </style>
 </head>
 
@@ -669,6 +764,8 @@
         appId: "..."
       });
     let PASS = 0, PW = "", MODE = "", bsub = "device", tSite = "";
+    let siteSort = "last", sortOpen = false;
+    try { siteSort = localStorage.getItem("_lg_ssort") || "last" } catch (e) { }
     const db = getFirestore(app);
     const auth = getAuth(app);
     const $ = document.getElementById("app");
@@ -1101,10 +1198,15 @@
       unsubs.push(onSnapshot(query(collection(db, "attempts"), orderBy("ts", "desc"), limit(PASS)), s => { attempts = s.docs.map(d => ({ id: d.id, ...d.data() })); checkAlerts(); render() }, lock));
     }
 
+
     function render() {
       if (open && !devices.find(x => x.id === open)) { open = null; if (unLogs) { unLogs(); unLogs = null } }
       const live = devices.filter(d => !d.trashed), trash = devices.filter(d => d.trashed);
-      const sites = [...new Set(live.map(d => d.site || "unknown"))].sort();
+      const lastOf = s => live.filter(d => (d.site || "unknown") === s).reduce((a, d) => Math.max(a, T(d.lastSeen)?.getTime() || 0), 0);
+      let sites = [...new Set(live.map(d => d.site || "unknown"))];
+      sites = siteSort === "az"
+        ? sites.sort((a, b) => a.localeCompare(b))
+        : sites.sort((a, b) => lastOf(b) - lastOf(a));
       if (!["__sites", "__att", "__bans", "__trash"].includes(tab)) tab = "__sites";
       if (curSite && !sites.includes(curSite)) curSite = "";
       let body = "";
@@ -1123,7 +1225,14 @@
         else body = `<button class="btn back" data-a="tback">${ic("arrow-left")}${esc(tSite)}</button>` + trash.filter(d => (d.site || "unknown") === tSite).map(d => devCard(d, true)).join("");
       }
       else if (!curSite) {
-        body = sites.length ? sites.map(s => {
+        const sortBar = `<div class="sortbar"><div class="sortwrap">
+  <button class="sortbtn ${sortOpen ? "open" : ""}" data-a="smenu">
+    <i class="fa-solid fa-${siteSort === "az" ? "arrow-down-a-z" : "clock-rotate-left"} a"></i>${siteSort === "az" ? "A-Z" : "Last view"}<i class="fa-solid fa-chevron-down c"></i></button>
+  <div class="sortmenu ${sortOpen ? "open" : ""}">
+    <button class="sortopt ${siteSort === "last" ? "on" : ""}" data-a="spick" data-v="last"><i class="fa-solid fa-clock-rotate-left"></i>Last view${siteSort === "last" ? '<i class="fa-solid fa-check ck"></i>' : ""}</button>
+    <button class="sortopt ${siteSort === "az" ? "on" : ""}" data-a="spick" data-v="az"><i class="fa-solid fa-arrow-down-a-z"></i>A-Z${siteSort === "az" ? '<i class="fa-solid fa-check ck"></i>' : ""}</button>
+  </div></div></div>`;
+        body = sites.length ? sortBar + sites.map(s => {
           const l = live.filter(d => (d.site || "unknown") === s), n = l.filter(isOn).length;
           return `<div class="card dev" data-a="site" data-v="${esc(s)}"><div class="av">${ic("globe")}</div>
       <div class="info"><div class="top"><b>${esc(s)}</b>${n ? `<span class="badge ok"><span class="pulse"></span>${n} online</span>` : ""}${l.some(isNew) ? `<span class="badge nw">NEW</span>` : ""}</div>
@@ -1213,12 +1322,15 @@
     }
 
     $.addEventListener("click", async e => {
+      if (sortOpen && !e.target.closest(".sortwrap")) { sortOpen = false; render() }
       const el = e.target.closest("[data-a]"); if (!el) return;
       const a = el.dataset.a, id = el.dataset.id, lid = el.dataset.lid, d = devices.find(x => x.id === id);
       if (a !== "open") e.stopPropagation();
       const lref = () => doc(db, "devices", open, "logs", lid);
-      if (a === "bsub") { bsub = el.dataset.v; render() }
-      else if (a === "tab") { tab = el.dataset.v; open = null; curSite = ""; tSite = ""; attOpen = ""; if (unLogs) { unLogs(); unLogs = null } render() }
+      if (a === "smenu") { sortOpen = !sortOpen; render() }
+      else if (a === "spick") { siteSort = el.dataset.v; sortOpen = false; try { localStorage.setItem("_lg_ssort", siteSort) } catch (e) { } render() }
+      else if (a === "bsub") { bsub = el.dataset.v; render() }
+      else if (a === "tab") { sortOpen = false; tab = el.dataset.v; open = null; curSite = ""; tSite = ""; attOpen = ""; if (unLogs) { unLogs(); unLogs = null } render() }
       else if (a === "tsite") { tSite = el.dataset.v; render(); scrollTo(0, 0) }
       else if (a === "tback") { tSite = ""; render() }
       else if (a === "site") { curSite = el.dataset.v; render(); scrollTo(0, 0) }
@@ -1358,7 +1470,7 @@ transform:translate(-60px,-100px);will-change:transform,opacity}
     }, { passive: true });
 
 
-    setInterval(() => { if (MODE && !document.querySelector(".modal")) render() }, 15000);
+    setInterval(() => { if (MODE && !document.querySelector(".modal") && document.activeElement?.id !== "ssel") render() }, 15000);
     if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { }));
     const sp = loadSess();
     $.innerHTML = `<div class="empty">${ic("spinner fa-spin")}Loading...</div>`;
